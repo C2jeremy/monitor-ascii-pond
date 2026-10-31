@@ -1,0 +1,1113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>像素场景原型</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one full-viewport character canvas; glass controls float above it, node roster docked right (bottom sheet on phones). */
+:root {
+  --bg: #f4f2ec;
+  --fg: #2c2a26;
+  --muted: #5f5b54;
+  --faint: #8a847a;
+  --line: rgba(44, 42, 38, 0.12);
+  --tab: rgba(44, 42, 38, 0.06);
+  --glass: rgba(250, 249, 246, 0.72);
+  --glass-edge: rgba(255, 255, 255, 0.75);
+  --shadow: 0 1px 2px rgba(60, 45, 30, 0.06), 0 12px 30px -16px rgba(60, 45, 30, 0.32);
+  --accent: #ad4637;
+  --ok: #4f7a52;
+  --warn: #b5701c;
+  --crit: #b8382a;
+  --sea-1: #e6f0ef;
+  --sea-2: #cadedd;
+  --map-1: #f3f1ea;
+  --map-2: #e8e4d8;
+  --forest-1: #e9f0e5;
+  --forest-2: #f6efe0;
+  --mono: "Geist Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --serif: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
+  --sans: system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111417; --fg: #e4dfd4; --muted: #aaa397; --faint: #7d776d;
+    --line: rgba(255, 240, 220, 0.1); --tab: rgba(255, 240, 220, 0.06);
+    --glass: rgba(20, 23, 27, 0.66); --glass-edge: rgba(255, 245, 230, 0.06);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 14px 34px -16px rgba(0, 0, 0, 0.8);
+    --accent: #e8957f; --ok: #9ccf96; --warn: #e0a95c; --crit: #f07a68;
+    --sea-1: #0c1c27; --sea-2: #03090f; --map-1: #121619; --map-2: #0c0f12;
+    --forest-1: #0a111d; --forest-2: #111a14;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111417; --fg: #e4dfd4; --muted: #aaa397; --faint: #7d776d;
+  --line: rgba(255, 240, 220, 0.1); --tab: rgba(255, 240, 220, 0.06);
+  --glass: rgba(20, 23, 27, 0.66); --glass-edge: rgba(255, 245, 230, 0.06);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 14px 34px -16px rgba(0, 0, 0, 0.8);
+  --accent: #e8957f; --ok: #9ccf96; --warn: #e0a95c; --crit: #f07a68;
+  --sea-1: #0c1c27; --sea-2: #03090f; --map-1: #121619; --map-2: #0c0f12;
+  --forest-1: #0a111d; --forest-2: #111a14;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.5 var(--sans);
+  overflow: hidden;
+}
+body[data-scene="sea"] { background: linear-gradient(180deg, var(--sea-1), var(--sea-2)); }
+body[data-scene="map"] { background: radial-gradient(120% 90% at 40% 45%, var(--map-1), var(--map-2)); }
+body[data-scene="forest"] { background: linear-gradient(180deg, var(--forest-1), var(--forest-2)); }
+#pond { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; touch-action: manipulation; }
+
+.ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px 12px;
+  padding-block: max(12px, env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  backdrop-filter: blur(14px) saturate(1.35);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 var(--glass-edge), var(--shadow);
+}
+.bar {
+  grid-column: 1 / -1;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 8px 10px 8px 14px;
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand .mark { font: 500 18px var(--mono); color: var(--accent); letter-spacing: -2px; }
+.brand b { display: block; font: 500 16px/1.15 var(--serif); letter-spacing: 1px; }
+.brand small { display: block; font-size: 11px; color: var(--muted); }
+.tabs { display: flex; gap: 3px; padding: 3px; background: var(--tab); border-radius: 10px; }
+.tabs button, .btn {
+  font: inherit;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.tabs button { padding: 5px 13px; border-radius: 8px; font-size: 13px; }
+.tabs button:hover { color: var(--fg); }
+.tabs button[aria-selected="true"] { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.actions .label { font-size: 11px; color: var(--faint); margin-right: 2px; }
+.btn { font-size: 12px; color: var(--fg); border: 1px solid var(--line); padding: 4px 10px; border-radius: 8px; }
+.btn:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+.btn[aria-pressed="false"] { color: var(--muted); }
+.sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.legend {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: start;
+  max-width: 100%;
+  margin: 0;
+  padding: 7px 14px;
+  font-size: 12px;
+  color: var(--muted);
+  text-wrap: pretty;
+}
+.legend b { color: var(--fg); font-weight: 500; font-family: var(--serif); margin-right: 6px; }
+
+.roster {
+  grid-column: 2;
+  grid-row: 2 / 4;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  align-self: start;
+  max-height: 100%;
+}
+.roster-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 11px 14px 8px; font-size: 11px; color: var(--muted); }
+.roster-head b { font: 500 15px var(--serif); color: var(--fg); }
+.roster-head span { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.list { overflow: auto; min-height: 0; display: flex; flex-direction: column; gap: 4px; padding: 0 8px 8px; }
+.node {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+.node:hover, .node.focus { background: var(--tab); border-color: var(--line); }
+.node.pinned { border-color: var(--accent); }
+.n-name { font: 14px var(--serif); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.n-code { font: 10px var(--mono); color: var(--faint); margin-left: 6px; letter-spacing: 1px; }
+.pill { font-size: 11px; padding: 0 8px; border-radius: 999px; color: var(--ok); background: color-mix(in srgb, currentColor 14%, transparent); align-self: center; }
+.pill.warn { color: var(--warn); }
+.pill.off { color: var(--faint); }
+.n-m { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr 1.5fr; gap: 6px; font: 11px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.n-m b { color: var(--fg); font-weight: 500; }
+.n-m .warn b { color: var(--warn); }
+.n-m .crit b { color: var(--crit); font-weight: 600; }
+.node.offline .n-name { color: var(--muted); }
+.node.offline { opacity: 0.75; }
+.cards-off .roster { display: none; }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  transform: translate(-50%, 8px);
+  padding: 7px 14px;
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 760px) {
+  .ui { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .roster { grid-column: 1; grid-row: 4; max-height: 34vh; align-self: end; }
+  .bar { gap: 8px; padding: 8px; }
+  .brand small { display: none; }
+  .actions { margin-left: 0; }
+  .actions .label { display: none; }
+  .btn { padding: 3px 8px; }
+  .tabs button { padding: 4px 10px; }
+  .toast { bottom: calc(34vh + 40px); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+</style>
+</head>
+<body data-scene="sea">
+<canvas id="pond" aria-label="背景场景，点击可互动"></canvas>
+<div class="ui">
+  <header class="bar glass">
+    <div class="brand">
+      <span class="mark" aria-hidden="true">▚▞</span>
+      <div><b>像素场景</b><small>Pond 背景原型 · 演示数据</small></div>
+    </div>
+    <nav class="tabs" role="tablist" aria-label="场景">
+      <button type="button" role="tab" id="tab-sea" data-scene="sea">深海水母</button>
+      <button type="button" role="tab" id="tab-map" data-scene="map">世界航线</button>
+      <button type="button" role="tab" id="tab-forest" data-scene="forest">萤火森林</button>
+    </nav>
+    <div class="actions">
+      <span class="label">模拟：</span>
+      <button type="button" class="btn" id="ev-off">断开一台</button>
+      <button type="button" class="btn" id="ev-cpu">压测一台</button>
+      <button type="button" class="btn" id="ev-net">流量暴涨</button>
+      <button type="button" class="btn" id="ev-reset">全部恢复</button>
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" class="btn" id="theme">切换明暗</button>
+      <button type="button" class="btn" id="cards" aria-pressed="true">节点卡片</button>
+    </div>
+  </header>
+  <p class="legend glass" id="legend"></p>
+  <aside class="roster glass" id="roster" aria-label="节点">
+    <div class="roster-head"><b>节点</b><span id="sum"></span></div>
+    <div class="list" id="list"></div>
+  </aside>
+</div>
+<div class="toast glass" id="toast" role="status"></div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (s) => document.querySelector(s);
+  const cv = $("#pond");
+  const ctx = cv.getContext("2d");
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const darkMQ = matchMedia("(prefers-color-scheme: dark)");
+  const store = {
+    get(k) { try { return localStorage.getItem("pond-scenes:" + k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem("pond-scenes:" + k, v); } catch {} },
+  };
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const MB = 1048576;
+  const hash = (x, y) => {
+    let h = (Math.imul(x | 0, 374761393) + Math.imul(y | 0, 668265263)) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  const vnoise = (x, y) => {
+    const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi;
+    const s = (t) => t * t * (3 - 2 * t);
+    const a = hash(xi, yi), b = hash(xi + 1, yi), c = hash(xi, yi + 1), d = hash(xi + 1, yi + 1);
+    const u = s(xf), v = s(yf);
+    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+  };
+  const norm180 = (l) => ((((l + 180) % 360) + 360) % 360) - 180;
+  const km = (a, b) => {
+    const r = Math.PI / 180, dLat = (b.lat - a.lat) * r, dLon = (b.lon - a.lon) * r;
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) ** 2;
+    return 2 * 6371 * Math.asin(Math.sqrt(h));
+  };
+  const isDark = () => {
+    const t = document.documentElement.dataset.theme;
+    return t === "dark" || (t !== "light" && darkMQ.matches);
+  };
+  const savedTheme = store.get("theme");
+  if (savedTheme === "dark" || savedTheme === "light") document.documentElement.dataset.theme = savedTheme;
+
+  // ---------------- 演示节点 ----------------
+  // lo = 地图上标签的偏移 [dx, dy, 对齐]
+  const NODES = [
+    { name: "HK-Tsuen-Wan-01", code: "HKG", lat: 22.3, lon: 114.2, mem: 0.37, disk: 0.2, load: 23, net: 4.2, lo: [-1.3, 1.3, "right"] },
+    { name: "Tokyo-Linode-NRT", code: "NRT", lat: 35.7, lon: 139.7, mem: 0.51, disk: 0.83, load: 61, net: 1.1, lo: [0, 2, "center"] },
+    { name: "SG-DigitalOcean", code: "SIN", lat: 1.35, lon: 103.8, mem: 0.6, disk: 0.65, load: 8, net: 0.23, lo: [0, 2, "center"] },
+    { name: "Seoul-Oracle-ARM", code: "ICN", lat: 37.5, lon: 127, mem: 0.71, disk: 0.47, load: 3, net: 0.08, lo: [1.2, -1.5, "left"] },
+    { name: "LA-CN2-GIA", code: "LAX", lat: 34, lon: -118.2, mem: 0.86, disk: 0.29, load: 41, net: 9.8, lo: [-1.4, 1, "right"] },
+    { name: "NYC-Vultr-HighFreq", code: "JFK", lat: 40.7, lon: -74, mem: 0.38, disk: 0.92, load: 88, net: 0.6, lo: [1.4, 1.2, "left"] },
+    { name: "Toronto-OVH", code: "YYZ", lat: 43.7, lon: -79.4, mem: 0.45, disk: 0.4, load: 0, net: 0, off: true, lo: [-1.3, -1.4, "right"] },
+    { name: "Frankfurt-Hetzner", code: "FRA", lat: 50.1, lon: 8.7, mem: 0.55, disk: 0.33, load: 35, net: 2.6, lo: [1.4, 1.4, "left"] },
+    { name: "London-Contabo", code: "LHR", lat: 51.5, lon: -0.1, mem: 0.42, disk: 0.21, load: 17, net: 1.4, lo: [-1.4, 0.2, "right"] },
+    { name: "Amsterdam-Backup", code: "AMS", lat: 52.4, lon: 4.9, mem: 0.3, disk: 0.78, load: 5, net: 0.05, lo: [1.2, -1.5, "left"] },
+    { name: "Shanghai-Aliyun", code: "PVG", lat: 31.2, lon: 121.5, mem: 0.66, disk: 0.5, load: 52, net: 3.3, lo: [1.5, 0.4, "left"] },
+    { name: "Home-NAS-Beijing", code: "PEK", lat: 39.9, lon: 116.4, mem: 0.5, disk: 0.88, load: 0, net: 0, off: true, lo: [-1.4, -1.2, "right"] },
+  ].map((n, i) => ({
+    ...n, i, online: !n.off, forcedOff: false, stress: 0,
+    cpu: n.off ? 0 : n.load, rx: 0, tx: 0, memNow: n.mem,
+    s: { cpu: n.off ? 0 : n.load, net: n.off ? 0 : n.net * MB * 1.3, mem: n.mem },
+  }));
+  let surge = 0;
+  function simulate() {
+    const t = performance.now() / 1000;
+    for (const n of NODES) {
+      n.online = !n.off && !n.forcedOff;
+      if (!n.online) { n.cpu = 0; n.rx = n.tx = 0; continue; }
+      const w = (p) => 0.5 + 0.5 * Math.sin(t / p + n.i * 1.7);
+      n.cpu = n.stress > 0 ? 94 + Math.random() * 5 : clamp(n.load * (0.7 + 0.6 * w(7)) + Math.random() * 4, 0, 100);
+      n.memNow = clamp(n.mem + 0.04 * (w(13) - 0.5), 0, 0.98);
+      n.rx = n.net * MB * (0.4 + w(3)) * (surge > 0 ? 5 : 1);
+      n.tx = n.rx * 0.35;
+    }
+  }
+  const level = (v) => (v >= 90 ? "crit" : v >= 75 ? "warn" : "");
+  // 调色板索引：0 墨 1 强调 2 警告 3 危险 4 离线，5 起为场景自用
+  const stateCol = (n) => (!n.online ? 4 : n.s.cpu >= 90 ? 3 : n.s.cpu >= 75 ? 2 : -1);
+  const rate = (b) => (b < 1024 ? Math.round(b) + " B/s" : b < MB ? Math.round(b / 1024) + " KB/s" : (b / MB).toFixed(1) + " MB/s");
+
+  // ---------------- 字符网格 ----------------
+  const G = { cs: 10, cols: 0, rows: 0, ink: null, col: null, ch: null, mode: null, labels: [], view: { x0: 0, x1: 0, y0: 0, y1: 0 } };
+  let W = 0, H = 0, dpr = 1;
+  const mouse = { x: -99, y: -99, on: false };
+  let hoverId = null, pinned = null, focusId = null;
+
+  function plot(x, y, ink, col, ch, mode) {
+    x = Math.round(x); y = Math.round(y);
+    if (x < 0 || y < 0 || x >= G.cols || y >= G.rows || !(ink > 0)) return;
+    const i = y * G.cols + x;
+    if (ink < G.ink[i]) return;
+    G.ink[i] = ink > 1 ? 1 : ink;
+    G.col[i] = col;
+    G.ch[i] = ch ? ch.charCodeAt(0) : 0;
+    G.mode[i] = mode || 0;
+  }
+  const label = (x, y, text, o) => G.labels.push({ x, y, text, ...o });
+
+  const LV = 6;
+  function render(pal, ground) {
+    const { cs, cols, ink, col, ch, mode } = G;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    const buckets = new Map();
+    for (let i = 0; i < ink.length; i++) {
+      const v = ink[i];
+      if (v < 0.03) continue;
+      const key = ((mode[i] * 32 + col[i]) * LV) + Math.min(LV - 1, (v * LV) | 0);
+      let b = buckets.get(key);
+      if (!b) buckets.set(key, (b = []));
+      b.push(i);
+    }
+    const pad = cs > 7 ? 1 : 0.6;
+    for (const [key, b] of buckets) {
+      const lvl = key % LV, rest = (key - lvl) / LV, c = rest % 32, m = (rest - c) / 32;
+      if (m !== 0) continue;
+      ctx.globalAlpha = (lvl + 1) / LV;
+      ctx.fillStyle = pal[c];
+      for (const i of b) ctx.fillRect((i % cols) * cs + pad / 2, ((i / cols) | 0) * cs + pad / 2, cs - pad, cs - pad);
+    }
+    ctx.font = `${Math.round(cs * 0.95)}px ${getComputedStyle(document.body).getPropertyValue("--mono")}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const [key, b] of buckets) {
+      const lvl = key % LV, rest = (key - lvl) / LV, c = rest % 32, m = (rest - c) / 32;
+      if (m === 0) {
+        if (lvl < 2) continue;
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = ground;
+      } else {
+        ctx.globalAlpha = (lvl + 1) / LV;
+        ctx.fillStyle = pal[c];
+      }
+      for (const i of b) {
+        if (!ch[i]) continue;
+        ctx.fillText(String.fromCharCode(ch[i]), (i % cols) * cs + cs / 2, ((i / cols) | 0) * cs + cs / 2 + 0.5);
+      }
+    }
+    ctx.font = `500 11px ${getComputedStyle(document.body).getPropertyValue("--mono")}`;
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = ground;
+    for (const l of G.labels) {
+      const x = l.x * cs + cs / 2, y = l.y * cs + cs / 2;
+      ctx.textAlign = l.align || "center";
+      ctx.globalAlpha = (l.alpha ?? 1) * (l.focus ? 1 : 0.88);
+      ctx.strokeText(l.text, x, y);
+      ctx.fillStyle = l.focus ? pal[1] : pal[l.col != null && l.col >= 0 ? l.col : 0];
+      ctx.fillText(l.text, x, y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------------- 场景一：深海水母 ----------------
+  const sea = {
+    key: "sea",
+    title: "深海水母",
+    legend: () => "一只水母 = 一台服务器 · 脉动快慢 = CPU · 体型 = 内存 · 气泡 = 网络流量 · 熄灭沉底 = 离线 · 点击水中：搅动水流",
+    cs: (w) => (w < 640 ? 8 : 10),
+    pal: (d) => d
+      ? { c: ["#a9bcc6", "#ff9a7a", "#f3b562", "#ff6b5b", "#4d5a63", "#ff8fb1", "#6fd3e8", "#b49cff", "#ffc07a", "#7fbfd2", "#3b7f93", "#3f8a5c", "#4a473b"], g: "#06121a" }
+      : { c: ["#4e5d66", "#c4553f", "#b5701c", "#b8382a", "#98a3a6", "#c9587f", "#3a83a0", "#7a5fae", "#c47a2c", "#4f8fa6", "#7fb3ba", "#5a8a58", "#a8987a"], g: "#eef5f4" },
+    init() {
+      this.j = NODES.map((n, i) => ({ x: 0, y: 0, vx: 0, vy: 0, ph: hash(i, 1) * 6.28, hue: 5 + (i % 4) }));
+      this.bub = [];
+      this.rip = [];
+    },
+    resize() {
+      const v = G.view;
+      this.bed = v.y1 - 3;
+      this.sc = clamp((v.x1 - v.x0) / 120, 0.6, 1.2);
+      this.j.forEach((j, i) => {
+        j.x = v.x0 + (v.x1 - v.x0) * (0.1 + 0.8 * ((i * 0.618 + 0.1) % 1));
+        j.y = NODES[i].online ? v.y0 + (this.bed - v.y0) * (0.18 + 0.5 * ((i * 0.37 + 0.05) % 1)) : this.bed - 1;
+        j.vx = j.vy = 0;
+      });
+      const nw = Math.max(5, Math.round(G.cols / 14));
+      this.weeds = Array.from({ length: nw }, (_, k) => ({ x: ((k + 0.5) * G.cols) / nw + (hash(k, 3) - 0.5) * 6, h: 4 + Math.floor(hash(k, 7) * 7) }));
+    },
+    rad(n) { return (2.6 + n.s.mem * 3.4) * this.sc; },
+    step(dt, t) {
+      const v = G.view;
+      this.j.forEach((j, i) => {
+        const n = NODES[i], r = this.rad(n);
+        if (n.online) {
+          j.ph += dt * (0.3 + (n.s.cpu / 100) * 1.4) * Math.PI * 2;
+          j.vy += (-Math.max(0, Math.sin(j.ph)) * 7 + 2.2) * dt;
+          j.vx += (vnoise(t * 0.15, i * 7.3) - 0.5) * dt * 4;
+          if (mouse.on) {
+            const dx = mouse.x - j.x, dy = mouse.y - j.y, d = Math.hypot(dx, dy);
+            if (d < 26 && d > 2) { j.vx += (dx / d) * dt * 1.6; j.vy += (dy / d) * dt * 1.6; }
+          }
+          if (j.y < v.y0 + r + 2) j.vy += 8 * dt;
+          if (j.y > this.bed - r * 2.8) j.vy -= 8 * dt;
+          j.vy *= 1 - Math.min(1, dt * 1.3);
+          j.vx *= 1 - Math.min(1, dt * 0.9);
+          const rateB = Math.min(9, 0.35 + (n.s.net / MB) * 0.8);
+          if (Math.random() < rateB * dt) this.bub.push({ x: j.x + (Math.random() - 0.5) * r * 1.6, y: j.y + 1, vy: -(5 + Math.random() * 5), ph: Math.random() * 6, s: Math.random() });
+        } else {
+          j.vy += 3 * dt;
+          j.vy *= 1 - Math.min(1, dt * 2);
+          j.vx *= 1 - Math.min(1, dt * 3);
+        }
+        if (j.x < v.x0 + r * 1.3 + 1) j.vx += 6 * dt;
+        if (j.x > v.x1 - r * 1.3 - 1) j.vx -= 6 * dt;
+        j.x += j.vx * dt;
+        j.y += j.vy * dt;
+        if (!n.online && j.y > this.bed - 1) { j.y = this.bed - 1; j.vy = 0; }
+      });
+      // 互相让开，避免标签叠在一起
+      for (let a = 0; a < this.j.length; a++) for (let b = a + 1; b < this.j.length; b++) {
+        const A = this.j[a], B = this.j[b];
+        if (!NODES[a].online && !NODES[b].online) continue;
+        const min = (this.rad(NODES[a]) + this.rad(NODES[b])) * 1.5 + 3;
+        const dx = B.x - A.x, dy = (B.y - A.y) * 1.4, d = Math.hypot(dx, dy) || 0.01;
+        if (d < min) {
+          const f = ((min - d) / min) * 10 * dt;
+          A.vx -= (dx / d) * f; A.vy -= (dy / d) * f;
+          B.vx += (dx / d) * f; B.vy += (dy / d) * f;
+        }
+      }
+      for (const b of this.bub) { b.y += b.vy * dt; b.ph += dt * 3; }
+      this.bub = this.bub.filter((b) => b.y > -1);
+      if (this.bub.length > 700) this.bub.splice(0, this.bub.length - 700);
+      for (const r of this.rip) r.t += dt;
+      this.rip = this.rip.filter((r) => r.t < 1.4);
+    },
+    draw(t) {
+      const { cols, rows } = G;
+      const lim = rows * 0.55;
+      for (let y = 0; y < lim; y++) for (let x = 0; x < cols; x++) {
+        const c = Math.abs(Math.sin(x * 0.23 + t * 0.6 + Math.sin(y * 0.17 + t * 0.4) * 2.2) * Math.sin(y * 0.31 - t * 0.45 + Math.sin(x * 0.11 - t * 0.2) * 2));
+        if (c > 0.86) plot(x, y, (c - 0.86) * 4.5 * (1 - y / lim), 10, c > 0.95 ? "~" : "-", 1);
+      }
+      for (let x = 0; x < cols; x++) {
+        const h = this.bed + Math.round(vnoise(x * 0.08, 1) * 2.5 - 1);
+        for (let y = h; y < rows; y++) plot(x, y, y === h ? 0.38 : 0.16, 12, y === h ? (hash(x, 2) < 0.5 ? "_" : ".") : hash(x, y) < 0.3 ? ":" : ".", 0);
+      }
+      const gust = surge > 0 ? 1.8 : 1;
+      this.weeds.forEach((w, k) => {
+        for (let s = 0; s < w.h; s++) plot(w.x + Math.sin(t * 1.1 * gust + s * 0.45 + k) * s * 0.18 * gust, this.bed - 1 - s, 0.55 - 0.03 * s, 11, s % 2 ? ")" : "(", 1);
+      });
+      for (const b of this.bub) plot(b.x + Math.sin(b.ph) * 0.6, b.y, 0.75, 9, b.s > 0.7 ? "O" : b.s > 0.35 ? "o" : "°", 1);
+      this.j.forEach((j, i) => this.jelly(j, NODES[i]));
+      for (const r of this.rip) {
+        const R = r.t * 14, steps = Math.max(8, Math.ceil(R * 6.3));
+        for (let s = 0; s < steps; s++) { const a = (s / steps) * Math.PI * 2; plot(r.x + Math.cos(a) * R, r.y + Math.sin(a) * R * 0.7, (1 - r.t / 1.4) * 0.7, 1, "·", 1); }
+      }
+    },
+    jelly(j, n) {
+      const r = this.rad(n), on = n.online, foc = focusId === n.i;
+      const s = on ? 1 + 0.2 * Math.sin(j.ph) : 1;
+      const rx = r * 1.2 * s, ry = on ? r / s : r * 0.45;
+      const sc = stateCol(n), hue = on ? j.hue : 4, rimCol = sc >= 0 ? sc : hue;
+      const base = on ? 1 : 0.45;
+      for (let dy = -Math.ceil(ry); dy <= 0; dy++) for (let dx = -Math.ceil(rx); dx <= Math.ceil(rx); dx++) {
+        const e = (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry);
+        if (e > 1) continue;
+        const rim = e > 0.62;
+        plot(j.x + dx, j.y + dy, base * (rim ? 0.92 : 0.38 + 0.3 * (1 - e)), rim ? rimCol : hue, rim ? (dy === 0 ? "~" : "@") : e < 0.18 ? "%" : hash(dx + 40, dy + 40) < 0.5 ? ":" : "·", 0);
+      }
+      const nT = Math.max(3, Math.round(rx * 0.9)), len = on ? r * 2.4 + 2 : r * 0.9;
+      for (let k = 0; k < nT; k++) {
+        const side = (k / (nT - 1)) * 2 - 1, x0 = j.x + side * rx * 0.75;
+        for (let q = 1; q <= len; q++) {
+          const f = q / len;
+          if (on) {
+            const sway = Math.sin(j.ph * 0.9 - q * 0.45 + k * 1.3) * f * 1.6 - j.vx * f * 0.8;
+            plot(x0 + sway, j.y + q * 0.95, base * (0.8 - f * 0.6), hue, sway > 0 ? ")" : "(", 1);
+          } else plot(x0 + side * q * 0.9, j.y + 0.4, 0.4 * (1 - f * 0.5), 4, "~", 1);
+        }
+      }
+      if (foc) {
+        const R = rx + 2.2, steps = Math.ceil(R * 7);
+        for (let q = 0; q < steps; q++) { const a = (q / steps) * Math.PI * 2; plot(j.x + Math.cos(a) * R, j.y - ry * 0.3 + Math.sin(a) * (ry + 2.2), 0.9, 1, "·", 1); }
+      }
+      label(j.x, j.y - ry - 1.7, n.code + (on ? ` ${Math.round(n.s.cpu)}%` : " 离线"), { col: on ? (sc >= 0 ? sc : 0) : 4, focus: foc });
+    },
+    click(x, y) {
+      this.rip.push({ x, y, t: 0 });
+      for (let k = 0; k < 14; k++) this.bub.push({ x: x + (Math.random() - 0.5) * 4, y: y + (Math.random() - 0.5) * 2, vy: -(4 + Math.random() * 7), ph: Math.random() * 6, s: Math.random() });
+      for (const j of this.j) {
+        const dx = j.x - x, dy = j.y - y, d = Math.hypot(dx, dy) || 1;
+        if (d < 24) { j.vx += (dx / d) * 8 * (1 - d / 24); j.vy += (dy / d) * 8 * (1 - d / 24); }
+      }
+    },
+  };
+
+  // ---------------- 场景二：世界航线 ----------------
+  const LAND = [
+    [[-9.5,37],[-9,43],[-2,43.5],[-1.5,46],[-4.5,48.5],[1.5,50.5],[4,51.5],[8,54],[8.5,57],[10.5,57.5],[10.5,59],[5,59],[5,62],[10,64],[14,67],[18,70],[25,71],[30,70],[40,67],[44,68],[54,69],[60,69],[70,73],[80,73],[87,75],[100,78],[113,74],[130,71],[140,72],[160,70],[170,70],[180,69],[180,65],[173,61],[163,60],[160,54],[156,51],[156,57],[150,59],[142,59],[136,54],[141,52],[140,48],[135,43],[131,43],[129,40],[129,35],[126,34.5],[126,37.5],[124.5,40],[121.5,40.5],[122.5,37.5],[119,37],[120.5,34],[121.8,31],[122,29],[119.5,25.5],[116,22.8],[113,22],[110,21],[108,21.5],[106,20],[105.5,18],[108.5,15],[109,11.5],[106.5,9.5],[105,8.7],[103,10.5],[100.5,13.5],[99,10],[99.5,7],[101,6.5],[103.5,1.5],[101,2.5],[98.5,8],[98.5,13],[97.5,16],[94.5,16],[94,19],[92,21.5],[90,22],[87,21.5],[86,20],[84,18],[80.5,15.5],[80,10],[77.5,8],[76,10],[74,15],[72.8,19],[72.5,21.5],[70,22.5],[68,23.5],[66.5,25.5],[61.5,25.2],[57.5,25.7],[56.3,26.5],[56,24],[59.8,22.5],[57.5,18.8],[55,17],[52,16],[48,14],[45,12.8],[43.3,13],[42.5,15.5],[39,21.5],[36.5,25.5],[34.5,28],[34,31.3],[35.5,33],[36,35.8],[32.5,36.2],[30,36.3],[27.5,37],[26.5,39.5],[26,40.8],[23.5,40.2],[24,38],[22.5,36.5],[21,38.5],[19.5,41.5],[18.5,42.5],[15.5,44],[13.5,45.5],[12.5,44.5],[14,42],[16,41.5],[18.5,40.1],[16,38],[15.5,40],[12.5,41.5],[10.5,43],[8.5,44.4],[6,43.1],[3.2,43.2],[3.2,42],[0.5,40.5],[-0.5,38.5],[-2,36.7],[-5.5,36],[-7.5,37]],
+    [[-17,21],[-17,14.5],[-15,11],[-13,8],[-8,4.5],[-3,5],[2,6.3],[6,4.3],[9,4],[9.5,1],[9,-1],[12,-5],[13,-9],[12,-17],[14.5,-23],[16.5,-29],[18.5,-34.3],[20,-34.8],[25.5,-34],[28,-32.6],[31,-29.5],[32.8,-26],[35.5,-24],[35.3,-21],[36,-18.5],[40,-15.5],[40.5,-11],[39.5,-6],[40,-3],[42,-1],[44.5,1.5],[47.5,5],[51,10.5],[51.2,11.8],[48,11.2],[44,10.5],[43.2,11.6],[42.5,12.6],[40,15.6],[38.5,18],[37,21],[35.7,23.8],[34.5,26.5],[32.5,29.8],[32.3,31.3],[29,30.9],[25,31.6],[20,30.8],[19,32.2],[15,32.4],[11,33.2],[10,35.5],[11,37],[9.5,37.3],[3,36.8],[-1,35.3],[-5.5,35.8],[-6.5,34],[-9.5,30.5],[-10,28.8],[-13.2,27.6],[-15,24.5]],
+    [[-166,68.5],[-163,70.5],[-156,71.3],[-145,70],[-136,69.3],[-128,70],[-117,68.5],[-105,68],[-95,71.5],[-85,69.5],[-81,66],[-87,64],[-93,61],[-94.5,58.5],[-90,57],[-82.5,55],[-79.5,51.5],[-78.5,56],[-76.5,58.5],[-78,62.3],[-72.5,61.8],[-69,58.5],[-64.5,60.3],[-61.5,56],[-56,52.5],[-59,48],[-64.5,49],[-65,47],[-61,45.5],[-66,44],[-70,43.5],[-70.5,41.5],[-74,40.6],[-75.5,38.5],[-76,36],[-75.5,35.2],[-78,33.8],[-81,31.5],[-80,27],[-80.5,25.2],[-81.8,26.5],[-83,29],[-85.5,29.8],[-89,30.2],[-90,29],[-94,29.5],[-97.4,27.5],[-97.5,24.5],[-97.5,21.5],[-96,19],[-94.5,18.2],[-91,18.8],[-90.5,21],[-87,21.5],[-87.5,18.5],[-88.5,16],[-84,15.8],[-83.3,12],[-83.5,10],[-81.5,9],[-79,9.5],[-77.5,8.5],[-78,7.2],[-80.5,7.5],[-81.5,8.2],[-85.5,10],[-86,11.5],[-87.5,13],[-91.5,14],[-94,16],[-96.5,15.7],[-101,17.5],[-105.5,20],[-105.5,22.5],[-109.5,25.5],[-112.5,29],[-114.6,31.5],[-114,28.5],[-112,26],[-110,23],[-112,24.5],[-114.5,27.5],[-115.5,30],[-117.2,32.6],[-120.5,34.5],[-122.5,37.5],[-124,40.3],[-124.5,43],[-124,46.3],[-124.7,48.4],[-123,48.6],[-125,50],[-128,51.5],[-130.5,54.5],[-133,57],[-136.5,58.3],[-140,59.8],[-146,60.8],[-151.5,59.5],[-154,57.5],[-158,56.5],[-162,55],[-164.5,54.5],[-160,58],[-162,59.8],[-165,60.7],[-164.5,63],[-161,64.4],[-166,65.3]],
+    [[-73,78],[-66,81],[-50,82.3],[-30,83.5],[-20,81.5],[-18,77],[-20,72],[-23,70],[-30,68],[-38,65.5],[-43,60],[-48,61],[-51,64],[-54,67],[-55,70.5],[-60,75.5],[-68,76.5]],
+    [[-90,72],[-80,73.7],[-71,71.5],[-67,70],[-62,66.6],[-64.5,63.5],[-71.5,63.3],[-77.5,64.3],[-73.5,67.5],[-80,69.5],[-86,70.2]],
+    [[-77.5,8.5],[-75.5,10.5],[-72,12],[-70,11.5],[-67,10.7],[-62,10.7],[-60,8.5],[-57,6],[-53,5.5],[-51,4],[-50,1.5],[-48.5,-1],[-44.5,-2.5],[-39,-3.5],[-35.3,-5.5],[-35,-9],[-37.5,-12],[-39,-15],[-39.5,-19],[-41,-22],[-44,-23],[-48.5,-26],[-48.7,-28.5],[-52.5,-32.5],[-54,-34.5],[-57.5,-34.8],[-57,-37],[-62,-39],[-62.3,-41],[-65,-42],[-65.5,-45],[-67.5,-46.5],[-66,-48],[-68.5,-50.3],[-68.5,-52.5],[-71,-53.8],[-74,-52.5],[-75.3,-48],[-74,-44],[-73.5,-40],[-73.2,-37],[-71.6,-33],[-71.5,-29],[-70.4,-23.5],[-70.2,-18.5],[-75.3,-15.5],[-77,-12],[-79.5,-7.5],[-81.2,-5],[-80,-2.5],[-80.5,-0.5],[-79.5,1],[-78.5,2.5],[-77.3,4],[-77.5,6]],
+    [[113.5,-22],[114,-26.5],[115,-30],[115,-34],[118,-35],[123,-33.8],[126,-32.2],[131,-31.5],[135.5,-34.8],[138,-35.5],[140,-37.8],[144,-38.4],[146.5,-39],[150,-37.5],[151.3,-33.8],[153.3,-30],[153.1,-25.5],[150.8,-22.5],[146.3,-19],[145.4,-15],[143.6,-14],[142.5,-10.7],[141.6,-13],[141.5,-17],[139.5,-17.5],[136.5,-15.5],[136.8,-12.2],[132.5,-11.5],[130,-13],[129.5,-15],[126.5,-14],[123.5,-17],[121,-19.5],[117,-20.7]],
+    [[130.2,31.3],[131.5,31.5],[132,33.8],[135,33.5],[136.8,34.3],[139,34.7],[140.9,35.7],[141,38.3],[142,39.5],[141.4,41.4],[143.3,42],[145.5,43.3],[144,44.3],[141.8,45.4],[141.4,43.3],[140,41.5],[140.2,40],[139.7,38.5],[138.5,37.5],[137,37],[136,35.8],[133,35.5],[131,34.5],[130,33.5]],
+    [[-5.7,50],[1.3,51.2],[1.7,52.7],[0.2,53.5],[-1.5,55],[-2,56],[-1.8,57.5],[-3,58.6],[-5,58.6],[-6.2,57.4],[-5.6,55.4],[-4.8,54.8],[-3.2,54.2],[-3,53.4],[-4.6,53.2],[-4.2,52.3],[-5.2,51.7],[-3.2,51.4]],
+    [[-10,51.6],[-6,52],[-6,53.9],[-5.6,54.6],[-7.3,55.3],[-8.5,54.6],[-10,54]],
+    [[-24,65.5],[-22,63.9],[-18,63.4],[-14,64.5],[-13.6,65.6],[-16,66.5],[-21.5,66.3]],
+    [[95.3,5.5],[97.5,5.2],[100.4,2.2],[104,-1],[106,-3.5],[105.8,-5.8],[104.5,-5.9],[102.3,-4],[100.3,-1],[98.6,1.8]],
+    [[105.2,-6.8],[106.5,-6],[108.6,-6.7],[111,-6.4],[114.5,-7.7],[114.4,-8.7],[111,-8.2],[108,-7.8],[106.4,-7.4]],
+    [[109,1.5],[109.6,2],[111.5,2.6],[113,3.2],[115.5,5.3],[117,7],[119.3,5.4],[118,4.3],[118.5,1],[117.5,0],[116.5,-2.5],[116,-3.8],[114.5,-4],[111.5,-3],[110.2,-3],[110,-1.5],[109,0]],
+    [[131,-1.2],[134,-1],[138,-1.6],[141,-2.6],[145,-4.2],[147.5,-6],[147.8,-8],[150,-10.2],[147,-10],[144,-7.7],[141,-9.1],[138.5,-8.3],[137.8,-5.2],[135,-4.4],[132.2,-2.8]],
+    [[120.6,18.5],[122.3,18.4],[122.2,16],[121.6,14.2],[124,12.6],[125.5,11],[126.5,7.3],[125.5,5.8],[122,7],[123,9.5],[121.7,11.8],[120.5,14.3],[119.8,16]],
+    [[120.1,23],[121,25.2],[122,25],[121.3,22.4],[120.7,21.9]],
+    [[108.6,19.2],[110.5,20.2],[111,19.6],[109.5,18.2]],
+    [[79.8,8],[80.3,9.8],[81.8,7.5],[81.2,6.2],[80,6.1]],
+    [[43.3,-22],[44,-25],[47,-25.2],[49.5,-17],[50.4,-15.5],[49.3,-12],[47.5,-13.5],[44.3,-16.5]],
+    [[172.7,-34.4],[174.5,-36],[176,-37.6],[178.5,-37.7],[177,-39.5],[175,-41.6],[173.5,-41.5],[172.5,-40.5],[171,-42.5],[168.5,-44.5],[166.5,-46],[169,-46.6],[171.3,-44.3],[173,-43.5],[174.3,-41.7],[173.7,-39.2],[174.6,-36.8]],
+    [[-85,21.8],[-82,23.1],[-77.5,22],[-74.2,20.2],[-77.5,19.9],[-80,21.6],[-82.5,22.3]],
+    [[-74.4,18.5],[-72.5,19.9],[-68.4,19],[-68.6,18.2],[-71.4,17.6]],
+  ].map((p) => {
+    const xs = p.map((q) => q[0]), ys = p.map((q) => q[1]);
+    return { p, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  });
+  function inLand(lon, lat) {
+    for (const L of LAND) {
+      if (lon < L.x0 || lon > L.x1 || lat < L.y0 || lat > L.y1) continue;
+      const p = L.p;
+      let c = false;
+      for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+        const [xi, yi] = p[i], [xj, yj] = p[j];
+        if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) c = !c;
+      }
+      if (c) return true;
+    }
+    return false;
+  }
+  function sunPos() {
+    const d = new Date();
+    const doy = (Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 0)) / 864e5;
+    const decl = -23.44 * Math.cos(((2 * Math.PI) / 365) * (doy + 10));
+    const hrs = d.getUTCHours() + d.getUTCMinutes() / 60;
+    return { lat: decl, lon: norm180((12 - hrs) * 15) };
+  }
+
+  const map = {
+    key: "map",
+    title: "世界航线",
+    legend: () => "每个光点 = 一台服务器（按机房位置）· 脉冲快慢 = CPU · 候鸟 = 节点间流量 · 斜纹 = 此刻处于黑夜的地区 · 灰叉 = 离线 · 点击地图：从这里 ping 所有节点",
+    cs: (w) => clamp(Math.round(w / 200), 5, 8),
+    pal: (d) => d
+      ? { c: ["#ddd8cc", "#e8957f", "#e0a95c", "#f07a68", "#6c6960", "#8fa38c", "#4b7487", "#e8957f", "#6a7ea6", "#9ad49a"], g: "#101417" }
+      : { c: ["#3d3b36", "#ad4637", "#b5701c", "#b8382a", "#9b968c", "#5d6b5a", "#6f8fa0", "#ad4637", "#3a4658", "#3f7a4a"], g: "#f1eee6" },
+    LON0: 8, LMIN: -143, SPAN: 285, TOP: 72, LSPAN: 120,
+    init() {
+      this.pk = [];
+      this.flash = new Float32Array(NODES.length);
+      this.ms = [];
+      this.lost = [];
+      const E = [];
+      const add = (a, b) => { if (a !== b && !E.some((e) => (e[0] === a && e[1] === b) || (e[0] === b && e[1] === a))) E.push([a, b]); };
+      for (const a of NODES) {
+        const near = NODES.filter((b) => b !== a).sort((p, q) => km(a, p) - km(a, q));
+        add(a.i, near[0].i); add(a.i, near[1].i);
+      }
+      const by = (c) => NODES.find((n) => n.code === c).i;
+      [["LAX", "HKG"], ["LAX", "NRT"], ["LAX", "PVG"], ["JFK", "LHR"], ["JFK", "FRA"], ["FRA", "SIN"], ["LHR", "HKG"], ["SIN", "HKG"]].forEach(([a, b]) => add(by(a), by(b)));
+      this.edges = E;
+      this.sunAt = -1e9;
+    },
+    resize() {
+      const v = G.view, { cols, rows } = G;
+      const w = v.x1 - v.x0, h = v.y1 - v.y0 - 1;
+      this.k = Math.min(w / this.SPAN, h / this.LSPAN);
+      this.ox = v.x0 + (w - this.SPAN * this.k) / 2;
+      this.oy = v.y0 + (h - this.LSPAN * this.k) / 2;
+      this.mask = new Uint8Array(cols * rows);
+      this.grat = new Uint8Array(cols * rows);
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+        const g = this.inv(x + 0.5, y + 0.5);
+        if (!g) continue;
+        this.mask[y * cols + x] = inLand(g[0], g[1]) ? 1 : 3;
+        const [la, lb] = [this.inv(x, y), this.inv(x + 1, y + 1)];
+        if (la && lb) {
+          const latLine = Math.floor(la[1] / 30) !== Math.floor(lb[1] / 30);
+          const lonLine = Math.floor((la[0] + 180) / 30) !== Math.floor((lb[0] + 180) / 30) && Math.abs(lb[0] - la[0]) < 90;
+          if ((latLine && x % 2 === 0) || (lonLine && y % 2 === 0)) this.grat[y * cols + x] = 1;
+        }
+      }
+      for (let y = 1; y < rows - 1; y++) for (let x = 1; x < cols - 1; x++) {
+        const i = y * cols + x;
+        if (this.mask[i] === 1 && (this.mask[i - 1] === 3 || this.mask[i + 1] === 3 || this.mask[i - cols] === 3 || this.mask[i + cols] === 3)) this.mask[i] = 2;
+      }
+      this.routes = this.edges.map(([a, b]) => {
+        const p = this.path(NODES[a], NODES[b]);
+        const steps = Math.ceil(p.dist * this.k * 1.3), pts = [];
+        for (let s = 0; s <= steps; s += 2) { const q = this.pt(p, s / steps); if (q[2]) pts.push(q); }
+        return { a, b, pts };
+      });
+      this.night = null;
+      this.sunAt = -1e9;
+    },
+    proj(lon, lat) {
+      const u = norm180(lon - this.LON0) - this.LMIN;
+      const vis = u >= 0 && u <= this.SPAN && lat <= this.TOP && lat >= this.TOP - this.LSPAN;
+      return [this.ox + u * this.k, this.oy + (this.TOP - lat) * this.k, vis];
+    },
+    inv(x, y) {
+      const u = (x - this.ox) / this.k, lat = this.TOP - (y - this.oy) / this.k;
+      if (u < 0 || u > this.SPAN || lat > this.TOP || lat < this.TOP - this.LSPAN) return null;
+      return [norm180(u + this.LMIN + this.LON0), lat];
+    },
+    path(a, b) {
+      const dlon = norm180(b.lon - a.lon);
+      return { a: { lon: a.lon, lat: a.lat }, b: { lon: b.lon, lat: b.lat }, dlon, dist: Math.hypot(dlon, b.lat - a.lat) || 1 };
+    },
+    pt(p, t) {
+      const lift = Math.min(16, p.dist * 0.16);
+      return this.proj(p.a.lon + p.dlon * t, p.a.lat + (p.b.lat - p.a.lat) * t + Math.sin(Math.PI * t) * lift);
+    },
+    updateNight() {
+      const s = (this.sun = sunPos()), { cols, rows } = G, r = Math.PI / 180;
+      const N = this.night || (this.night = new Float32Array(cols * rows));
+      const sd = Math.sin(s.lat * r), cd = Math.cos(s.lat * r);
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+        const i = y * cols + x;
+        if (!this.mask[i]) { N[i] = 0; continue; }
+        const [lon, lat] = this.inv(x + 0.5, y + 0.5);
+        const cz = Math.sin(lat * r) * sd + Math.cos(lat * r) * cd * Math.cos((lon - s.lon) * r);
+        N[i] = clamp((0.06 - cz) / 0.12, 0, 1);
+      }
+    },
+    launch(a, b, o) {
+      const p = this.path(a, b);
+      this.pk.push({ ...p, ...o, t: 0, sp: clamp(16 / p.dist, 0.07, 0.6), seed: Math.random() });
+      if (this.pk.length > 400) this.pk.shift();
+    },
+    step(dt, t) {
+      if (t - this.sunAt > 20) { this.updateNight(); this.sunAt = t; }
+      for (const n of NODES) {
+        if (!n.online || Math.random() >= Math.min(5, 0.25 + (n.s.net / MB) * 0.6) * dt) continue;
+        const es = this.edges.filter((e) => e[0] === n.i || e[1] === n.i);
+        const e = es[Math.floor(Math.random() * es.length)];
+        const to = e[0] === n.i ? e[1] : e[0];
+        this.launch(n, NODES[to], { from: n.i, to, big: n.s.net > 3 * MB });
+      }
+      for (const p of this.pk) p.t += p.sp * dt;
+      for (const p of this.pk.filter((q) => q.t >= 1)) {
+        if (NODES[p.to].online) { this.flash[p.to] = 1; if (p.ping) this.ms.push({ i: p.to, v: p.ms, t: 2.6 }); }
+        else this.lost.push({ i: p.to, t: 1.2 });
+      }
+      this.pk = this.pk.filter((q) => q.t < 1);
+      for (let i = 0; i < this.flash.length; i++) this.flash[i] = Math.max(0, this.flash[i] - dt * 1.5);
+      for (const m of this.ms) m.t -= dt;
+      this.ms = this.ms.filter((m) => m.t > 0);
+      for (const l of this.lost) l.t -= dt;
+      this.lost = this.lost.filter((l) => l.t > 0);
+      if (this.ping) { this.ping.t -= dt; if (this.ping.t <= 0) this.ping = null; }
+    },
+    ring(x, y, R, ink, col) {
+      const steps = Math.max(6, Math.ceil(R * 6.3));
+      for (let s = 0; s < steps; s++) { const a = (s / steps) * Math.PI * 2; plot(x + Math.cos(a) * R, y + Math.sin(a) * R, ink, col, "·", 1); }
+    },
+    draw(t) {
+      const d = isDark(), { cols, rows } = G, N = this.night;
+      for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+        const i = y * cols + x, m = this.mask[i];
+        if (!m) continue;
+        const nt = N ? N[i] : 0;
+        if (m !== 3) {
+          const coast = m === 2 ? 0.1 : 0;
+          if (d) plot(x, y, (0.24 + coast) * (1 - nt * 0.55), 5, 0, 0);
+          else plot(x, y, 0.14 + coast + nt * 0.14, nt > 0.5 ? 8 : 5, 0, 0);
+        } else if (nt > 0.3 && (x + y) % 3 === 0) plot(x, y, 0.24 * nt, 8, "/", 1);
+        else if (this.grat[i]) plot(x, y, 0.12, 6, "·", 1);
+        else if (hash(x, y) < 0.03) plot(x, y, 0.12 + 0.08 * Math.sin(t * 0.8 + x * 0.4 + y), 6, "~", 1);
+      }
+      if (this.sun) {
+        const [sx, sy, vis] = this.proj(this.sun.lon, this.sun.lat);
+        if (vis) { plot(sx, sy, 0.9, 2, "*", 0); this.ring(sx, sy, 1.6 + 0.3 * Math.sin(t * 2), 0.5, 2); }
+      }
+      for (const r of this.routes) {
+        const live = NODES[r.a].online && NODES[r.b].online;
+        for (const q of r.pts) plot(q[0], q[1], live ? 0.26 : 0.08, live ? 7 : 4, "·", 1);
+      }
+      for (const p of this.pk) {
+        const [hx, hy, hv] = this.pt(p, p.t);
+        const st = 1 / Math.max(8, p.dist * this.k * 1.2), col = p.ping ? 9 : 1;
+        const flap = Math.floor(t * 7 + p.seed * 10) % 2 ? "v" : "^";
+        if (hv) plot(hx, hy, 0.95, col, flap, 0);
+        for (let j = 1; j <= 3; j++) { const q = this.pt(p, Math.max(0, p.t - st * j)); if (q[2]) plot(q[0], q[1], 0.5 - j * 0.12, col, "·", 1); }
+        if (p.big && hv) {
+          const [bx, by] = this.pt(p, Math.max(0, p.t - st * 1.6));
+          let dx = hx - bx, dy = hy - by;
+          const l = Math.hypot(dx, dy);
+          if (l > 0 && l < 4) { dx /= l; dy /= l; plot(bx - dy * 1.2, by + dx * 1.2, 0.75, col, flap, 0); plot(bx + dy * 1.2, by - dx * 1.2, 0.75, col, flap, 0); }
+        }
+      }
+      NODES.forEach((n, i) => {
+        const [x, y, vis] = this.proj(n.lon, n.lat);
+        if (!vis) return;
+        const sc = stateCol(n), col = sc >= 0 ? sc : 9, foc = focusId === i;
+        if (n.online) {
+          const per = 2.4 - (n.s.cpu / 100) * 1.9, ph = ((t + i * 0.37) / per) % 1;
+          this.ring(x, y, 0.8 + ph * 4, (1 - ph) * 0.65, col);
+          if (this.flash[i] > 0) this.ring(x, y, (1 - this.flash[i]) * 2.5 + 1, this.flash[i] * 0.8, 1);
+          plot(x, y, 1, col, "+", 0);
+          for (const [ax, ay] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) plot(x + ax, y + ay, 0.45, col, 0, 0);
+        } else {
+          plot(x, y, 0.9, 4, "x", 1);
+          const f = Math.floor(t * 4);
+          if (hash(f, i) < 0.3) plot(x + (hash(i, f) - 0.5) * 3, y + (hash(f, i + 9) - 0.5) * 2, 0.35, 4, "·", 1);
+        }
+        if (foc) this.ring(x, y, 3.2, 0.95, 1);
+        label(x + n.lo[0], y + n.lo[1], n.code + (n.online ? ` ${Math.round(n.s.cpu)}%` : " 离线"), { align: n.lo[2], col: n.online ? (sc >= 0 ? sc : 0) : 4, focus: foc });
+      });
+      for (const m of this.ms) {
+        const n = NODES[m.i], [x, y] = this.proj(n.lon, n.lat);
+        label(x + n.lo[0], y + n.lo[1] + 1.6, m.v + " ms", { align: n.lo[2], col: 9, alpha: Math.min(1, m.t) });
+      }
+      for (const l of this.lost) {
+        const n = NODES[l.i], [x, y] = this.proj(n.lon, n.lat);
+        plot(x + 1, y - 1, l.t * 0.8, 4, "?", 1);
+      }
+      if (this.ping) this.ring(this.ping.x, this.ping.y, (1 - this.ping.t) * 6 + 0.5, this.ping.t * 0.9, 9);
+    },
+    click(x, y) {
+      const g = this.inv(x, y);
+      if (!g) return;
+      const src = { lon: g[0], lat: g[1] };
+      for (const n of NODES) {
+        if (!n.online) continue;
+        this.launch(src, n, { to: n.i, ping: true, ms: Math.round(km(src, n) / 100 + 3 + Math.random() * 5) });
+      }
+      this.ping = { x, y, t: 1 };
+    },
+  };
+
+  // ---------------- 场景三：萤火森林 ----------------
+  const forest = {
+    key: "forest",
+    title: "萤火森林",
+    legend: (d) => d
+      ? "夜晚 · 一棵树 = 一台服务器 · 萤火虫多少 = 流量 · 闪烁快慢 = CPU · 枯树 = 离线 · 点击地面：种下新芽（切到亮色看白天）"
+      : "白天 · 一棵树 = 一台服务器 · 树冠泛黄、变红 = CPU 偏高 · 落叶 = 流量 · 风力 = 全站总流量 · 枯树 = 离线 · 点击地面：种下新芽（切到暗色看夜晚）",
+    cs: (w) => (w < 640 ? 7 : 9),
+    pal: (d) => d
+      ? { c: ["#d6d2c4", "#e8957f", "#c9a04a", "#d0644d", "#5c5a52", "#1d2a36", "#20342a", "#3d6a45", "#3f7a4f", "#4a3a2c", "#eaf27a", "#ece4c6", "#c8d2e6", "#2b281f"], g: "#0c1218" }
+      : { c: ["#3c3a33", "#ad4637", "#c08a2e", "#b8452f", "#8f897d", "#9fb39a", "#7f9a72", "#5f8a46", "#3f7a46", "#7a5a3e", "#c9b43a", "#e2a23b", "#aab8bd", "#9a8466"], g: "#f3efe3" },
+    init() {
+      this.leaves = [];
+      this.sprouts = [];
+      this.wind = 0.4;
+      this.ff = NODES.map((n, i) => Array.from({ length: 14 }, (_, k) => ({ a: hash(i, k) * 6.28, r: 0.5 + hash(k, i) * 0.9, sp: (0.3 + hash(k + 3, i) * 0.6) * (hash(k, i + 5) < 0.5 ? -1 : 1), ph: hash(i + 7, k) * 6.28, x: 0, y: 0, ready: false })));
+    },
+    resize() {
+      const v = G.view;
+      this.hz = Math.round(v.y0 + (v.y1 - v.y0) * 0.64);
+      const sc = clamp((v.y1 - v.y0) / 70, 0.55, 1.3), span = v.x1 - v.x0;
+      this.trees = NODES.map((n, i) => {
+        const Ht = (7 + n.mem * 6 + n.disk * 3) * sc;
+        return { i, x: v.x0 + span * (0.05 + (0.9 * (i + 0.5)) / NODES.length) + (hash(i, 11) - 0.5) * span * 0.02, base: this.hz + 1 + (i % 3), H: Ht, hw: Ht * 0.32 + 1.5 };
+      });
+      this.clouds = [0, 1, 2, 3].map((k) => ({ x: hash(k, 21) * G.cols, y: v.y0 + 2 + hash(k, 22) * (this.hz - v.y0) * 0.35, w: 6 + hash(k, 23) * 8 }));
+      for (const arr of this.ff) for (const f of arr) f.ready = false;
+    },
+    canopyCol(n) { return n.s.cpu >= 90 ? 3 : n.s.cpu >= 75 ? 2 : 8; },
+    leaf(tr, n) {
+      this.leaves.push({ x: tr.x + (Math.random() - 0.5) * tr.hw * 1.6, y: tr.base - tr.H * (0.3 + Math.random() * 0.6), vy: 2.5 + Math.random() * 2, ph: Math.random() * 6, col: this.canopyCol(n), rest: 0, ch: "*,'`"[Math.floor(Math.random() * 4)] });
+    },
+    step(dt, t) {
+      const d = isDark();
+      const tot = NODES.reduce((s, n) => s + (n.online ? n.s.net : 0), 0);
+      this.wind += (0.25 + Math.min(2.2, tot / (14 * MB)) - this.wind) * Math.min(1, dt * 0.8);
+      if (!d) for (const tr of this.trees) {
+        const n = NODES[tr.i];
+        if (n.online && Math.random() < Math.min(6, 0.2 + (n.s.net / MB) * 0.9) * dt) this.leaf(tr, n);
+      }
+      for (const l of this.leaves) {
+        if (l.rest > 0) { l.rest += dt; continue; }
+        l.ph += dt * 3;
+        l.x += (this.wind * 2.6 + Math.sin(l.ph) * 1.2) * dt;
+        l.y += l.vy * dt;
+        if (l.y >= this.hz + 1 + Math.floor(hash(Math.round(l.x), 3) * 2)) l.rest = 0.001;
+      }
+      this.leaves = this.leaves.filter((l) => l.rest < 4 && l.x < G.cols + 2);
+      if (this.leaves.length > 500) this.leaves.splice(0, this.leaves.length - 500);
+      for (const tr of this.trees) {
+        const n = NODES[tr.i], cx = tr.x, cy = tr.base - tr.H * 0.55;
+        const active = n.online ? Math.min(14, 2 + Math.round((n.s.net / MB) * 2.2)) : 0;
+        const freq = 0.6 + (n.s.cpu / 100) * 3;
+        this.ff[tr.i].forEach((f, k) => {
+          f.on = k < active;
+          if (!f.ready) { f.x = cx; f.y = cy; f.ready = true; }
+          f.a += f.sp * dt;
+          f.ph += dt * freq * Math.PI * (0.8 + hash(k, tr.i) * 0.4);
+          let tx = cx + Math.cos(f.a) * tr.hw * 1.5 * f.r + (vnoise(t * 0.3 + k, tr.i) - 0.5) * 4;
+          let ty = cy + Math.sin(f.a * 1.3) * tr.H * 0.45 * f.r;
+          if (mouse.on && Math.hypot(mouse.x - f.x, mouse.y - f.y) < 14) { tx = mouse.x + Math.cos(f.a * 2) * 2.5; ty = mouse.y + Math.sin(f.a * 2) * 1.5; }
+          f.x += (tx - f.x) * Math.min(1, dt * 1.2);
+          f.y += (ty - f.y) * Math.min(1, dt * 1.2);
+        });
+      }
+      for (const s of this.sprouts) s.t += dt;
+    },
+    draw(t) {
+      const d = isDark(), v = G.view, { cols, rows } = G, hz = this.hz, Wd = this.wind;
+      if (d) {
+        const N = Math.round(cols * hz * 0.012);
+        for (let k = 0; k < N; k++) {
+          const tw = 0.15 + 0.6 * Math.pow(Math.max(0, Math.sin(t * (0.6 + hash(k, 3) * 1.6) + k)), 4);
+          plot(Math.floor(hash(k, 1) * cols), Math.floor(hash(k, 2) * (hz - 4)), tw, 12, hash(k, 4) < 0.15 ? "+" : ".", 1);
+        }
+        const mx = v.x1 - 10, my = v.y0 + 5;
+        for (let dy = -3; dy <= 3; dy++) for (let dx = -4; dx <= 4; dx++) {
+          if ((dx * dx) / 16 + (dy * dy) / 9 <= 1 && ((dx - 1.6) ** 2) / 12 + ((dy + 0.6) ** 2) / 7 > 1) plot(mx + dx, my + dy, 0.85, 11, 0, 0);
+        }
+      } else {
+        const sx = v.x1 - 10, sy = v.y0 + 5;
+        for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) if (dx * dx + dy * dy <= 9.5) plot(sx + dx, sy + dy, 0.75, 11, 0, 0);
+        for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2 + t * 0.15; plot(sx + Math.cos(a) * 5.2, sy + Math.sin(a) * 5.2, 0.5, 11, "·", 1); }
+        for (const c of this.clouds) {
+          const x = ((c.x + t * Wd * 1.4) % (cols + 30)) - 15;
+          for (let dy = -2; dy <= 1; dy++) for (let dx = -Math.round(c.w); dx <= c.w; dx++) {
+            if ((dx * dx) / (c.w * c.w) + (dy * dy) / (dy < 0 ? 5 : 2) <= 1) plot(x + dx, c.y + dy, 0.22, 12, 0, 0);
+          }
+        }
+      }
+      for (let x = 0; x < cols; x++) {
+        const r1 = Math.round(hz - 5 - vnoise(x * 0.035, 1.5) * 9), r2 = Math.round(hz - 1 - vnoise(x * 0.07, 5.5) * 5);
+        for (let y = r1; y < hz; y++) plot(x, y, d ? 0.55 : 0.16, 5, 0, 0);
+        for (let y = r2; y < hz; y++) plot(x, y, d ? 0.7 : 0.22, 6, 0, 0);
+        const sw = Math.sin(t * 2.2 + x * 0.25) * Wd * 0.7 + Math.sin(t * 0.7 + x * 0.05) * 0.25;
+        plot(x, hz, 0.5, 7, sw > 0.45 ? "/" : sw < -0.45 ? "\\" : "|", 1);
+        plot(x, hz + 1, 0.3, 7, hash(x, 9) < 0.5 ? "," : '"', 1);
+        for (let y = hz + 2; y < rows; y++) {
+          if (hash(x, y) < 0.1) plot(x, y, 0.22, 13, ".", 1);
+          else plot(x, y, d ? 0.35 : 0.07, 13, 0, 0);
+        }
+      }
+      for (const tr of this.trees) {
+        const n = NODES[tr.i], foc = focusId === tr.i, top = tr.base - tr.H;
+        if (n.online) {
+          const col = this.canopyCol(n), ink = (d ? 0.6 : 0.8) * (foc ? 1.2 : 1);
+          for (let y = Math.round(tr.base - tr.H * 0.28); y <= tr.base; y++) plot(tr.x, y, d ? 0.7 : 0.75, 9, "|", 0);
+          for (let k = 0; k < 3; k++) {
+            const t0 = top + k * tr.H * 0.24, th = tr.H * 0.36, hw = tr.hw * (0.55 + k * 0.25);
+            for (let ry = 0; ry <= th; ry++) {
+              const y = t0 + ry, w = Math.round(hw * (ry / th));
+              const sway = Wd * 0.5 * Math.sin(t * 1.4 + tr.i) * (1 - (y - top) / tr.H);
+              for (let dx = -w; dx <= w; dx++) {
+                const edge = Math.abs(dx) === w;
+                plot(tr.x + dx + sway, y, ink * (edge ? 0.8 : 1), col, edge ? (dx < 0 ? "/" : "\\") : hash(dx + tr.i * 7 + 50, ry) < 0.5 ? "^" : "A", 0);
+              }
+            }
+          }
+        } else {
+          for (let y = Math.round(top + tr.H * 0.15); y <= tr.base; y++) plot(tr.x, y, 0.6, 4, "|", 1);
+          for (let k = 0; k < 4; k++) {
+            const by = Math.round(top + tr.H * (0.25 + k * 0.17)), len = 3 + (3 - k) * 0.6, dir = k % 2 ? 1 : -1;
+            for (let s = 1; s <= len; s++) plot(tr.x + dir * s, by - s * 0.6, 0.55, 4, dir > 0 ? "/" : "\\", 1);
+          }
+        }
+        if (foc) plot(tr.x, top - 2, 1, 1, "v", 0);
+        const sc = stateCol(n);
+        label(tr.x, tr.base + 2.2, n.code + (n.online ? "" : " 离线"), { col: n.online ? (sc >= 0 ? sc : 0) : 4, focus: foc });
+      }
+      for (const l of this.leaves) plot(l.x, l.y, l.rest > 0 ? 0.7 * (1 - l.rest / 4) : 0.85, l.col, l.ch, 1);
+      if (d) for (const arr of this.ff) for (const f of arr) {
+        if (!f.on) continue;
+        const b = Math.pow(Math.max(0, Math.sin(f.ph)), 3);
+        plot(f.x, f.y, 0.2 + 0.8 * b, 10, b > 0.5 ? "*" : ".", b > 0.5 ? 0 : 1);
+        if (b > 0.4) { plot(f.x + 1, f.y, 0.3 * b, 10, "·", 1); plot(f.x - 1, f.y, 0.3 * b, 10, "·", 1); plot(f.x, f.y - 1, 0.25 * b, 10, "·", 1); }
+      }
+      for (const s of this.sprouts) {
+        const g = Math.min(1, s.t / 3), h = 1 + Math.round(g * 3);
+        for (let k = 0; k < h; k++) plot(s.x, hz - k, 0.8, 7, "|", 1);
+        plot(s.x, hz - h, 0.9, g >= 1 ? 8 : 7, g >= 1 ? "Y" : "v", 1);
+      }
+    },
+    click(x, y) {
+      if (y >= this.hz - 1) {
+        if (this.sprouts.length > 40) this.sprouts.shift();
+        this.sprouts.push({ x: Math.round(x), t: 0 });
+        return;
+      }
+      if (isDark()) {
+        for (const arr of this.ff) for (const f of arr) {
+          const dx = f.x - x, dy = f.y - y, dd = Math.hypot(dx, dy) || 1;
+          if (dd < 16) { f.x += (dx / dd) * 6; f.y += (dy / dd) * 4; }
+        }
+      } else {
+        const tr = this.trees.reduce((a, b) => (Math.abs(b.x - x) < Math.abs(a.x - x) ? b : a));
+        const n = NODES[tr.i];
+        if (n.online) for (let k = 0; k < 14; k++) this.leaf(tr, n);
+      }
+    },
+  };
+
+  // ---------------- 外壳 ----------------
+  const SCENES = { sea, map, forest };
+  let scene = null, cardsOn = store.get("cards") !== "off";
+
+  function computeView() {
+    const cs = G.cs;
+    const lb = $("#legend").getBoundingClientRect();
+    const v = { x0: 1, x1: G.cols - 1, y0: Math.ceil((lb.bottom + 6) / cs), y1: G.rows };
+    if (cardsOn) {
+      const r = $("#roster").getBoundingClientRect();
+      if (r.width) {
+        if (r.left > W * 0.5) v.x1 = Math.floor((r.left - 12) / cs);
+        else v.y1 = Math.floor((r.top - 6) / cs);
+      }
+    }
+    G.view = v;
+  }
+  function resize() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = innerWidth; H = innerHeight;
+    G.cs = scene.cs(W);
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(H * dpr);
+    G.cols = Math.ceil(W / G.cs);
+    G.rows = Math.ceil(H / G.cs);
+    const n = G.cols * G.rows;
+    G.ink = new Float32Array(n); G.col = new Uint8Array(n); G.ch = new Uint16Array(n); G.mode = new Uint8Array(n);
+    computeView();
+    scene.resize();
+  }
+  function setLegend() {
+    $("#legend").innerHTML = "";
+    const b = document.createElement("b");
+    b.textContent = scene.title;
+    $("#legend").append(b, scene.legend(isDark()));
+  }
+  function setScene(key) {
+    if (!SCENES[key]) key = "sea";
+    scene = SCENES[key];
+    if (!scene.ready) { scene.init(); scene.ready = true; }
+    document.body.dataset.scene = key;
+    document.querySelectorAll(".tabs button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.scene === key)));
+    setLegend();
+    store.set("scene", key);
+    if (location.hash !== "#" + key) history.replaceState(null, "", "#" + key);
+    resize();
+  }
+
+  // 节点卡片
+  const list = $("#list");
+  for (const n of NODES) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "node";
+    b.dataset.i = n.i;
+    b.innerHTML = '<span class="n-name"></span><span class="pill"></span><span class="n-m"><span class="m-cpu">CPU <b></b></span><span class="m-mem">MEM <b></b></span><span class="m-net">↓↑ <b></b></span></span>';
+    b.querySelector(".n-name").textContent = n.name;
+    const code = document.createElement("span");
+    code.className = "n-code";
+    code.textContent = n.code;
+    b.querySelector(".n-name").append(code);
+    list.append(b);
+    n.el = b;
+  }
+  function syncFocus() {
+    focusId = hoverId ?? pinned;
+    for (const n of NODES) {
+      n.el.classList.toggle("focus", focusId === n.i);
+      n.el.classList.toggle("pinned", pinned === n.i);
+    }
+  }
+  list.addEventListener("pointerover", (e) => { const b = e.target.closest(".node"); if (b) { hoverId = +b.dataset.i; syncFocus(); } });
+  list.addEventListener("pointerleave", () => { hoverId = null; syncFocus(); });
+  list.addEventListener("click", (e) => { const b = e.target.closest(".node"); if (!b) return; const i = +b.dataset.i; pinned = pinned === i ? null : i; syncFocus(); });
+  function updateCards() {
+    let on = 0, net = 0;
+    for (const n of NODES) {
+      const el = n.el;
+      el.classList.toggle("offline", !n.online);
+      const pill = el.querySelector(".pill");
+      pill.textContent = n.online ? (n.stress > 0 ? "压测中" : "在线") : "离线";
+      pill.className = "pill" + (n.online ? (n.stress > 0 ? " warn" : "") : " off");
+      const c = el.querySelector(".m-cpu"), m = el.querySelector(".m-mem");
+      c.className = "m-cpu " + (n.online ? level(n.cpu) : "");
+      c.lastChild.textContent = n.online ? n.cpu.toFixed(0) + "%" : "—";
+      m.className = "m-mem " + (n.online ? level(n.memNow * 100) : "");
+      m.lastChild.textContent = n.online ? (n.memNow * 100).toFixed(0) + "%" : "—";
+      el.querySelector(".m-net b").textContent = n.online ? rate(n.rx + n.tx) : "—";
+      if (n.online) { on++; net += n.rx + n.tx; }
+    }
+    $("#sum").textContent = `在线 ${on}/${NODES.length} · ${rate(net)}`;
+  }
+
+  let toastTimer;
+  function toast(msg) {
+    const el = $("#toast");
+    el.textContent = msg;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 2400);
+  }
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  function refresh() { simulate(); updateCards(); }
+  $("#ev-off").addEventListener("click", () => {
+    const c = NODES.filter((n) => n.online);
+    if (!c.length) return toast("已经没有在线节点了");
+    const n = pick(c);
+    n.forcedOff = true;
+    refresh();
+    toast(`${n.code} 断开了`);
+  });
+  $("#ev-cpu").addEventListener("click", () => {
+    const c = NODES.filter((n) => n.online && !n.stress);
+    if (!c.length) return toast("没有可以压测的在线节点");
+    const n = pick(c);
+    n.stress = 15;
+    refresh();
+    toast(`${n.code} CPU 压测中，持续 15 秒`);
+  });
+  $("#ev-net").addEventListener("click", () => { surge = 15; refresh(); toast("全站流量 ×5，持续 15 秒"); });
+  $("#ev-reset").addEventListener("click", () => {
+    surge = 0;
+    for (const n of NODES) { n.forcedOff = false; n.stress = 0; }
+    refresh();
+    toast("全部恢复");
+  });
+  $("#theme").addEventListener("click", () => {
+    const next = isDark() ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    store.set("theme", next);
+    setLegend();
+  });
+  darkMQ.addEventListener?.("change", setLegend);
+  function applyCards() {
+    document.body.classList.toggle("cards-off", !cardsOn);
+    $("#cards").setAttribute("aria-pressed", String(cardsOn));
+  }
+  $("#cards").addEventListener("click", () => {
+    cardsOn = !cardsOn;
+    store.set("cards", cardsOn ? "on" : "off");
+    applyCards();
+    requestAnimationFrame(resize);
+  });
+  document.querySelectorAll(".tabs button").forEach((b) => b.addEventListener("click", () => setScene(b.dataset.scene)));
+  addEventListener("hashchange", () => setScene(location.hash.slice(1)));
+  let rz = 0;
+  addEventListener("resize", () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(resize); });
+  addEventListener("pointermove", (e) => { mouse.x = e.clientX / G.cs; mouse.y = e.clientY / G.cs; mouse.on = e.target === cv; });
+  document.addEventListener("pointerleave", () => { mouse.on = false; });
+  cv.addEventListener("click", (e) => scene.click(e.clientX / G.cs, e.clientY / G.cs));
+
+  applyCards();
+  simulate();
+  updateCards();
+  setScene(location.hash.slice(1) || store.get("scene") || "sea");
+  setInterval(refresh, 1000);
+
+  let last = performance.now(), T = 0;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000) * (reduceMotion ? 0.35 : 1);
+    last = now;
+    T += dt;
+    surge = Math.max(0, surge - dt);
+    const k = Math.min(1, dt * 2.5);
+    for (const n of NODES) {
+      n.stress = Math.max(0, n.stress - dt);
+      n.s.cpu += (n.cpu - n.s.cpu) * k;
+      n.s.net += (n.rx + n.tx - n.s.net) * k;
+      n.s.mem += (n.memNow - n.s.mem) * k;
+    }
+    scene.step(dt, T);
+    G.ink.fill(0);
+    G.labels.length = 0;
+    scene.draw(T);
+    const p = scene.pal(isDark());
+    render(p.c, p.g);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
