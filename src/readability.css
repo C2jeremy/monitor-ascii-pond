@@ -260,3 +260,9 @@
     box-shadow: none;
   }
 }
+
+/* ---------- Forest scene ---------- */
+[data-scene-name="forest"] .brand-mark {
+  transform: none;
+  font-size: 38px;
+}

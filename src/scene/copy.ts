@@ -1,0 +1,41 @@
+import type { Scene } from "../config/settings";
+
+/** Words that change with the background scene; everything else on the page is shared. */
+export const sceneCopy = {
+  pond: {
+    mark: "≈",
+    brand: "POND",
+    place: "池畔观测",
+    seal: "池",
+    ambientIcon: "≈",
+    ambientLabel: "全屏游鱼背景",
+    toGarden: "切换水庭布局",
+    toAmbient: "切换全屏游鱼背景",
+    pause: "暂停锦鲤",
+    resume: "继续锦鲤",
+    failed: "池塘暂不可用",
+    off: "池塘已关闭",
+    still: "静水模式 · 遵循减少动态效果设置",
+    resting: "鱼群小憩中",
+    interact: "轻点水面，投一把鱼食。",
+    idle: "看鱼游，也看节点运行。",
+  },
+  forest: {
+    mark: "↟",
+    brand: "FOREST",
+    place: "林间观测",
+    seal: "林",
+    ambientIcon: "⋀",
+    ambientLabel: "全屏森林背景",
+    toGarden: "切换林庭布局",
+    toAmbient: "切换全屏森林背景",
+    pause: "暂停林间动态",
+    resume: "继续林间动态",
+    failed: "森林暂不可用",
+    off: "森林已关闭",
+    still: "静林模式 · 遵循减少动态效果设置",
+    resting: "林间静歇中",
+    interact: "轻点林间，唤一阵风。",
+    idle: "看林间风起，也看节点运行。",
+  },
+} satisfies Record<Scene, Record<string, string>>;

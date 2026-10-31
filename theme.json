@@ -61,24 +61,40 @@
       "options": [
         {
           "value": "garden",
-          "label": "水庭模式"
+          "label": "分栏模式（右侧场景）"
         },
         {
           "value": "ambient",
-          "label": "游鱼背景模式"
+          "label": "全屏背景模式"
+        }
+      ]
+    },
+    {
+      "key": "scene",
+      "type": "select",
+      "label": "背景场景",
+      "default": "forest",
+      "options": [
+        {
+          "value": "forest",
+          "label": "像素森林"
+        },
+        {
+          "value": "pond",
+          "label": "锦鲤池塘"
         }
       ]
     },
     {
       "key": "pond_enabled",
       "type": "boolean",
-      "label": "显示锦鲤池塘",
+      "label": "显示背景动画",
       "default": true
     },
     {
       "key": "feeding_enabled",
       "type": "boolean",
-      "label": "允许投喂",
+      "label": "允许点击互动（投喂 / 起风）",
       "default": true
     },
     {

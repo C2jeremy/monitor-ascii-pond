@@ -3,6 +3,7 @@ import type { PondInstance } from "../vendor/ascii-pond/pond.js";
 import { useHidden, useMedia } from "../hooks";
 type Props = {
   enabled: boolean;
+  scene: "forest" | "pond";
   feeding: boolean;
   paused: boolean;
   theme: "light" | "dark";
@@ -11,6 +12,7 @@ type Props = {
 };
 export const PondLayer = memo(function PondLayer({
   enabled,
+  scene,
   feeding,
   paused,
   theme,
@@ -36,20 +38,30 @@ export const PondLayer = memo(function PondLayer({
       if (disposed || document.hidden || starting || pond) return;
       starting = true;
       try {
-        const { mount } = await import("../vendor/ascii-pond/pond.js");
+        const engine =
+          scene === "forest"
+            ? await import("../scene/forest.js")
+            : await import("../vendor/ascii-pond/pond.js");
         if (disposed || document.hidden || !canvas.current) return;
         const state = current.current;
-        pond = mount(canvas.current, {
-          species: [
-            { type: "koi", count: mobile ? 2 : 4, young: mobile ? 1 : 2 },
-          ],
+        const common = {
           theme: state.theme,
           paused: state.paused || state.reduced || state.hidden,
           feed: state.feeding,
           maxFps: mobile ? 24 : 30,
-          maxDpr: mobile ? 1 : 1.5,
-          contentRoot: document.getElementById("root")!,
-        });
+        };
+        pond =
+          scene === "forest"
+            ? (engine as typeof import("../scene/forest.js")).mount(canvas.current, {
+                ...common,
+                maxDpr: mobile ? 1.5 : 2,
+              })
+            : (engine as typeof import("../vendor/ascii-pond/pond.js")).mount(canvas.current, {
+                ...common,
+                species: [{ type: "koi", count: mobile ? 2 : 4, young: mobile ? 1 : 2 }],
+                maxDpr: mobile ? 1 : 1.5,
+                contentRoot: document.getElementById("root")!,
+              });
         instance.current = pond;
         lastTheme.current = state.theme;
         canvas.current.dataset.state = pond.paused ? "paused" : "running";
@@ -84,7 +96,7 @@ export const PondLayer = memo(function PondLayer({
       pond?.destroy();
       instance.current = null;
     };
-  }, [enabled, mobile, forced, onUnavailable]);
+  }, [enabled, scene, mobile, forced, onUnavailable]);
   useEffect(() => {
     const pond = instance.current;
     if (!pond) return;
@@ -102,6 +114,6 @@ export const PondLayer = memo(function PondLayer({
     instance.current?.setTheme(theme === "light", origin ?? undefined);
   }, [theme, origin]);
   return enabled && !forced ? (
-    <canvas ref={canvas} className="pond-canvas" aria-hidden="true" />
+    <canvas ref={canvas} key={scene} className="pond-canvas" data-scene={scene} aria-hidden="true" />
   ) : null;
 });

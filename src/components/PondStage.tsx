@@ -9,6 +9,7 @@ export function PondStage({
   paused,
   enabled,
   feeding,
+  scene = "pond",
 }: {
   rx: number | null;
   tx: number | null;
@@ -16,6 +17,7 @@ export function PondStage({
   paused: boolean;
   enabled: boolean;
   feeding: boolean;
+  scene?: "forest" | "pond";
 }) {
   const rim = useId();
   const stage = useRef<HTMLElement>(null);
@@ -37,6 +39,52 @@ export function PondStage({
     align();
     return () => { observer.disconnect(); removeEventListener("resize", align); };
   }, []);
+  if (scene === "forest")
+    return (
+      <section ref={stage} className="pond-stage forest-stage" aria-label="林庭">
+        <div className="pond-stage-heading">
+          <span>弐 / 林庭</span>
+          <span>
+            {!enabled ? "林静" : paused ? "林间静歇" : "风过林梢"} <i className="stage-dot" />
+          </span>
+        </div>
+        <div className="pond-basin forest-basin" data-forest-frame>
+          <span className="pond-poem">
+            <span>一林</span>
+            <span>清风</span>
+            <small>
+              WOOD
+              <br />
+              NO. 01
+            </small>
+          </span>
+        </div>
+        <div className="pond-flow" data-pond-ignore>
+          <div className="flow-title">
+            <span>{partial ? "已上报合计" : "林风读数"}</span>
+            <small>LIVE TRAFFIC</small>
+          </div>
+          <div className="flow-reading">
+            <span>↓ 入风 / 下载</span>
+            <strong>{rate(rx)}</strong>
+            <span className="flow-wave" aria-hidden="true">
+              · ⌒ ⌒⌒ · ⌒ ·
+            </span>
+          </div>
+          <div className="flow-reading">
+            <span>↑ 出风 / 上传</span>
+            <strong>{rate(tx)}</strong>
+            <span className="flow-wave" aria-hidden="true">
+              · ⌒⌒ · ⌒ ⌒ ·
+            </span>
+          </div>
+        </div>
+        <div className="pond-stage-foot">
+          <span>风过林梢，节点各有回声。</span>
+          <span>{enabled && !paused && feeding ? "轻点 · 起风 ↘" : "静看 · 林间如常"}</span>
+        </div>
+      </section>
+    );
   return (
     <section ref={stage} className="pond-stage" aria-label="锦鲤水庭" data-pond-habitat data-pond-overflow="visible">
       <div className="pond-stage-heading">

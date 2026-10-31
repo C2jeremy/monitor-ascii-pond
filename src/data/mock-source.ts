@@ -186,14 +186,16 @@ export const source: Source = {
   demo: true,
   async loadSite() {
     return {
-      site_name: "锦鲤池塘",
+      site_name: "林间观测",
       authed: false,
       public_page: true,
       history_days: 30,
     };
   },
   async loadConfig() {
-    return parseConfig({});
+    // 演示站可以用 ?scene=pond 对比原来的锦鲤背景。
+    const scene = new URLSearchParams(location.search).get("scene");
+    return parseConfig(scene ? { scene } : {});
   },
   subscribe(notify) {
     const push = () =>

@@ -20,6 +20,7 @@ import { useHidden, useMedia } from "./hooks";
 import { PondLayer } from "./pond/PondLayer";
 import { NodeRow } from "./components/NodeRow";
 import { PondStage } from "./components/PondStage";
+import { sceneCopy } from "./scene/copy";
 import { PaperSelect } from "./components/PaperSelect";
 import Detail from "./components/Detail";
 import { routeId, nodeHref, homeHref, hashRouting } from "./route";
@@ -170,10 +171,10 @@ export default function App() {
     dispatchEvent(new Event("pond-layout"));
   }, [layoutKey]);
   useEffect(() => {
-    document.title = [selected?.name, site?.site_name || "锦鲤池塘"]
+    document.title = [selected?.name, site?.site_name || (settings.scene === "forest" ? "林间观测" : "锦鲤池塘")]
       .filter(Boolean)
       .join(" · ");
-  }, [selected?.name, site?.site_name]);
+  }, [selected?.name, site?.site_name, settings.scene]);
   const open = (id: number, e: MouseEvent<HTMLAnchorElement>) => {
     if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
       return;
@@ -212,6 +213,7 @@ export default function App() {
     savePreference("display", next);
   };
   const pondEnabled = settings.pond_enabled && !pondFailed;
+  const words = sceneCopy[settings.scene];
   const ambient = route !== null || display === "ambient";
   const hasTitle = Boolean(settings.hero_title.trim());
   const hasIntro = hasTitle || Boolean(settings.hero_eyebrow.trim() || settings.hero_subtitle.trim());
@@ -219,6 +221,7 @@ export default function App() {
     <>
       <PondLayer
         enabled={settingsReady && pondEnabled}
+        scene={settings.scene}
         paused={paused}
         feeding={settings.feeding_enabled}
         theme={theme}
@@ -226,7 +229,7 @@ export default function App() {
         onUnavailable={unavailable}
       />
       {ambient && <div className="ambient-water" data-pond-habitat data-pond-overflow="visible" data-pond-scene="ambient" aria-hidden="true" />}
-      <div className={"site-shell" + (route !== null ? " has-detail" : "") + (ambient ? " ambient-scene" : "") + (route === null && ambient ? " home-ambient" : "") + (route === null && !hasTitle ? " home-compact" : "")}>
+      <div data-scene-name={settings.scene} className={"site-shell" + (route !== null ? " has-detail" : "") + (ambient ? " ambient-scene" : "") + (route === null && ambient ? " home-ambient" : "") + (route === null && !hasTitle ? " home-compact" : "")}>
         <a className="skip-link" href="#main">
           跳到主要内容
         </a>
@@ -243,13 +246,13 @@ export default function App() {
             }}
           >
             <span className="brand-mark" aria-hidden="true">
-              ≈
+              {words.mark}
             </span>
             <span>
               <b data-pond-ink>
-                POND<span className="brand-dot">.</span>
+                {words.brand}<span className="brand-dot">.</span>
               </b>
-              <small>{site?.site_name || "池畔观测"}</small>
+              <small>{site?.site_name || words.place}</small>
             </span>
           </a>
           <nav
@@ -263,11 +266,11 @@ export default function App() {
               <button
                 className="icon-button display-toggle"
                 onClick={toggleDisplay}
-                aria-label="全屏游鱼背景"
+                aria-label={words.ambientLabel}
                 aria-pressed={display === "ambient"}
-                title={display === "garden" ? "切换全屏游鱼背景" : "切换水庭布局"}
+                title={display === "garden" ? words.toAmbient : words.toGarden}
               >
-                <span aria-hidden="true" data-pond-ink>{display === "garden" ? "▥" : "≈"}</span>
+                <span aria-hidden="true" data-pond-ink>{display === "garden" ? "▥" : words.ambientIcon}</span>
               </button>
             )}
             <button
@@ -282,9 +285,9 @@ export default function App() {
               <button
                 className="icon-button"
                 onClick={togglePause}
-                aria-label={paused ? "继续锦鲤" : "暂停锦鲤"}
+                aria-label={paused ? words.resume : words.pause}
                 aria-pressed={paused}
-                title={paused ? "继续锦鲤" : "暂停锦鲤"}
+                title={paused ? words.resume : words.pause}
               >
                 <span aria-hidden="true" data-pond-ink>{paused ? "▷" : "Ⅱ"}</span>
               </button>
@@ -294,7 +297,7 @@ export default function App() {
             </a>
           </nav>
         </header>
-        <section className="scene-heading" aria-label="池畔概览">
+        <section className="scene-heading" aria-label="概览">
           {hasIntro && (
             <div className="intro" data-pond-avoid>
               {settings.hero_eyebrow.trim() && (
@@ -432,7 +435,7 @@ export default function App() {
                       <p>
                         {nodes.length
                           ? "没有找到匹配的节点"
-                          : "池塘很安静，尚无公开节点"}
+                          : settings.scene === "forest" ? "林间很安静，尚无公开节点" : "池塘很安静，尚无公开节点"}
                       </p>
                       {nodes.length > 0 && (
                         <button
@@ -497,13 +500,14 @@ export default function App() {
               paused={paused || reduced}
               enabled={pondEnabled&&!forced}
               feeding={settings.feeding_enabled}
+              scene={settings.scene}
             />
 
           </div>}
         </main>
         <footer className="site-footer">
           <span data-pond-avoid data-pond-ignore>
-            <span className="footer-seal">池</span> POND /{" "}
+            <span className="footer-seal">{words.seal}</span> {words.brand} /{" "}
             <a
               href="https://github.com/ayingQAQ/monitor-ascii-pond"
               title="查看 monitor-ascii-pond 项目"
@@ -515,16 +519,16 @@ export default function App() {
           </span>
           <span className="water-instruction" data-pond-avoid>
             {pondFailed
-              ? "池塘暂不可用"
+              ? words.failed
               : !settings.pond_enabled
-                ? "池塘已关闭"
+                ? words.off
                 : reduced
-                  ? "静水模式 · 遵循减少动态效果设置"
+                  ? words.still
                   : paused
-                    ? "鱼群小憩中"
+                    ? words.resting
                     : settings.feeding_enabled
-                      ? "轻点水面，投一把鱼食。"
-                      : "看鱼游，也看节点运行。"}
+                      ? words.interact
+                      : words.idle}
           </span>
         </footer>
       </div>
