@@ -16,7 +16,7 @@ export const source: Source = {
       throw new ApiError(200, "站点数据格式异常");
     return {
       site_name:
-        typeof data.site_name === "string" ? data.site_name : "锦鲤池塘",
+        typeof data.site_name === "string" ? data.site_name : "",
       authed: data.authed,
       public_page: data.public_page,
       history_days: finite(data.history_days) ? data.history_days : 7,

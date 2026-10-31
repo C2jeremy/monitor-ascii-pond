@@ -7,7 +7,7 @@ import "./notices.mjs";
 const manifest = JSON.parse(
   await readFile(resolve(root, "theme.json"), "utf8"),
 );
-if (manifest.short !== "monitor-pond" || manifest.version !== "1.3.0")
+if (manifest.short !== "monitor-forest" || manifest.version !== "2.0.0")
   throw Error("Unexpected manifest identity");
 const files = [];
 async function add(name) {
