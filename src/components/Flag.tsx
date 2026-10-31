@@ -6,7 +6,7 @@ const files = import.meta.glob("/node_modules/country-flag-icons/3x2/*.svg", {
   import: "default",
 }) as Record<string, string>;
 const byCode = new Map(
-  Object.entries(files).map(([path, url]) => [/([A-Z]{2})\.svg$/.exec(path)![1], url]),
+  Object.entries(files).map(([path, url]) => [/\/([A-Z]{2})\.svg$/.exec(path)?.[1] ?? "", url]),
 );
 /** Common non-ISO spellings agents report. */
 const aliases: Record<string, string> = { UK: "GB", EL: "GR" };
