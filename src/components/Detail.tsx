@@ -17,6 +17,7 @@ import { Meter, nodeState, statusLabels } from "./NodeRow";
 import { PaperSelect } from "./PaperSelect";
 import { Watermark } from "./Watermark";
 import { Flag } from "./Flag";
+import { TrafficStats } from "./TrafficStats";
 import { useScene, useSceneCopy } from "../scene/context";
 
 const hoursLabel = (h: number) => (h >= 24 ? `${h / 24} 天` : `${h} 小时`);
@@ -181,6 +182,7 @@ export default function Detail({
             <div><span>{words.rx}</span><strong>{bytes(n.month_rx)}</strong><small>累计 {bytes(n.total_rx)}</small></div>
             <div><span>{words.tx}</span><strong>{bytes(n.month_tx)}</strong><small>累计 {bytes(n.total_tx)}</small></div>
           </div>
+          <TrafficStats nodeId={n.id} historyDays={historyDays} />
           <div className="billing-note"><span>账期</span><strong>{money(n.price, n.currency)}</strong><span>/ {cycle(n.billing_cycle)}</span></div>
         </div>
         <Facts
