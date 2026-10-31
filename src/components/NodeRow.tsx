@@ -3,6 +3,7 @@ import type { NodeData } from "../domain/nodes";
 import { expiryDays, monthUsage, seenAgo } from "../domain/nodes";
 import { bytes, duration, expiry, pct, rate } from "../domain/format";
 import { Watermark } from "./Watermark";
+import { nodeHref } from "../route";
 export function nodeState(n: NodeData) {
   return !n.online
     ? "offline"
@@ -61,7 +62,7 @@ export const NodeRow = memo(function NodeRow({
       data-testid="node-row"
       data-node-id={n.id}
       data-pond-ignore
-      href={"/node/" + n.id}
+      href={nodeHref(n.id)}
       aria-label={n.name + "，" + statusLabels[state]}
       aria-current={selected ? "page" : undefined}
       onClick={(e) => onOpen(n.id, e)}

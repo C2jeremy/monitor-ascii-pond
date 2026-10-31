@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "dev:mock": "MOCK=1 vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
+    "build:demo": "tsc --noEmit && MOCK=1 vite build --mode demo --base ./ --outDir dist-demo",
     "preview": "vite preview --host 127.0.0.1",
     "check": "tsc --noEmit",
     "package": "npm run build && node scripts/package.mjs"

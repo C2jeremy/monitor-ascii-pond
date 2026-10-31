@@ -22,10 +22,7 @@ import { NodeRow } from "./components/NodeRow";
 import { PondStage } from "./components/PondStage";
 import { PaperSelect } from "./components/PaperSelect";
 import Detail from "./components/Detail";
-const routeId = () =>
-  location.pathname === "/"
-    ? null
-    : Number(/^\/node\/(\d+)\/?$/.exec(location.pathname)?.[1] || -1);
+import { routeId, nodeHref, homeHref, hashRouting } from "./route";
 const initialMode = () => {
   const v = readPreference("mode");
   return v === "auto" || v === "dark" || v === "light" ? v : null;
@@ -122,7 +119,11 @@ export default function App() {
   useEffect(() => {
     const sync = () => setRoute(routeId());
     addEventListener("popstate", sync);
-    return () => removeEventListener("popstate", sync);
+    if (hashRouting) addEventListener("hashchange", sync);
+    return () => {
+      removeEventListener("popstate", sync);
+      removeEventListener("hashchange", sync);
+    };
   }, []);
   useEffect(() => {
     const before = previousRoute.current;
@@ -182,14 +183,14 @@ export default function App() {
       id,
     };
     if (route === null)
-      history.pushState({ pondDetail: true }, "", "/node/" + id);
-    else history.replaceState(history.state, "", "/node/" + id);
+      history.pushState({ pondDetail: true }, "", nodeHref(id));
+    else history.replaceState(history.state, "", nodeHref(id));
     setRoute(id);
   };
   const close = () => {
     if (history.state?.pondDetail) history.back();
     else {
-      history.pushState({}, "", "/");
+      history.pushState({}, "", homeHref);
       setRoute(null);
     }
   };
@@ -232,7 +233,7 @@ export default function App() {
         <header className="site-header">
           <a
             className="brand"
-            href="/"
+            href={homeHref}
             data-pond-ignore
             data-pond-avoid
             onClick={(e) => {
