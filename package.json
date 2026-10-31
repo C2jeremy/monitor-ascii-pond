@@ -13,6 +13,7 @@
     "package": "npm run build && node scripts/package.mjs"
   },
   "dependencies": {
+    "country-flag-icons": "^1.6.20",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "recharts": "3.10.1"

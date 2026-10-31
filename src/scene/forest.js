@@ -404,7 +404,7 @@ export function mount(canvas, options = {}) {
   let last = 0, lastPaint = 0, time = 0, nearAt = -1e9;
   let vw = 0, vh = 0, dpr = 1, cw = 8, ch = 10, fontSize = 7;
   let scene = null, layers = null, area = null, framed = false, frameEl = null;
-  let fade = null;
+  let fade = null, orbShift = 0;
   const fps = clamp(Number(o.maxFps) || 30, 1, 60);
   const life = { leaves: [], birds: [], flies: [], shooting: null, attract: null, gust: { at: -99, x: 0 }, nextBirds: 6, nextStar: 9 };
 
@@ -432,17 +432,30 @@ export function mount(canvas, options = {}) {
     const reshape = resized || !area || nextFramed !== framed || Math.abs(next.w - area.w) > 0.5 || Math.abs(next.h - area.h) > 0.5;
     area = next; framed = nextFramed;
     if (reshape) build();
+    else {
+      const y = orbRow(scene.R);
+      orbShift = y === null ? 0 : Math.round(y - scene.orbRow) * ch;
+    }
     return true;
+  }
+  /**
+   * On the full page, tuck the sun or moon behind the summary bar's glass, where it blooms;
+   * on a node's page the title card plays that part. Read again as the route changes.
+   */
+  function orbRow(rows) {
+    const el = framed ? null : document.querySelector(".detail-title") || document.querySelector(".scene-heading");
+    const anchor = el?.getBoundingClientRect();
+    if (!anchor || !anchor.height) return null;
+    const y = (anchor.top + (window.scrollY || 0) + Math.min(anchor.height / 2, 70)) / ch;
+    return y < rows * 0.35 ? y : null;
   }
   function build() {
     const cols = Math.ceil(area.w / cw), rows = Math.ceil(area.h / ch);
     scene = compose(cols, rows, framed);
-    // On the full page, tuck the sun or moon behind the summary bar's glass, where it blooms.
-    const anchor = !framed && document.querySelector(".scene-heading")?.getBoundingClientRect();
-    if (anchor && anchor.height) {
-      const y = (anchor.top + (window.scrollY || 0) + anchor.height / 2) / ch;
-      if (y < rows * 0.35) scene.sky.y = scene.moon.y = y;
-    }
+    const y = orbRow(rows);
+    if (y !== null) scene.sky.y = scene.moon.y = y;
+    scene.orbRow = scene.sky.y;
+    orbShift = 0;
     layers = { sky: new Layer(cols, rows), ridge: new Layer(cols, rows), far: new Layer(cols, rows), mid: new Layer(cols, rows), near: new Layer(cols, rows) };
     for (const L of Object.values(layers)) L.mask = scene.mask;
     paintSky(layers.sky, pal, scene);
@@ -685,7 +698,7 @@ export function mount(canvas, options = {}) {
       }
     }
     const orb = pal.light ? s.sky : s.moon;
-    const ox = orb.x * cw, oy = orb.y * ch, orbR = Math.min(area.w, area.h) * (pal.light ? 0.2 : 0.16);
+    const ox = orb.x * cw, oy = orb.y * ch + orbShift, orbR = Math.min(area.w, area.h) * (pal.light ? 0.2 : 0.16);
     const halo = ctx.createRadialGradient(ox, oy, 0, ox, oy, orbR);
     const [hr, hg, hb] = pal.light ? pal.sun : pal.moon;
     halo.addColorStop(0, `rgba(${hr},${hg},${hb},${pal.light ? 0.28 : 0.12})`);
@@ -693,7 +706,7 @@ export function mount(canvas, options = {}) {
     ctx.globalAlpha = 1;
     ctx.fillStyle = halo;
     ctx.fillRect(ox - orbR, oy - orbR, orbR * 2, orbR * 2);
-    layer(layers.sky, 0);
+    ctx.drawImage(layers.sky.canvas, 0, 0, layers.sky.canvas.width, layers.sky.canvas.height, 0, orbShift, area.w, area.h);
     if (pal.light) {
       for (const cl of s.clouds) {
         const x0 = Math.floor(((cl.x + time * cl.speed) % (s.C + cl.w + 8)) - cl.w - 4);

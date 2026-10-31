@@ -16,6 +16,8 @@ import { useHidden } from "../hooks";
 import { Meter, nodeState, statusLabels } from "./NodeRow";
 import { PaperSelect } from "./PaperSelect";
 import { Watermark } from "./Watermark";
+import { Flag } from "./Flag";
+import { useScene, useSceneCopy } from "../scene/context";
 
 const hoursLabel = (h: number) => (h >= 24 ? `${h / 24} 天` : `${h} 小时`);
 const percent = (n: number) => `${Number(n.toFixed(1))}%`;
@@ -40,6 +42,7 @@ export default function Detail({
   historyDays?: number;
   showExpiry: boolean;
 }) {
+  const scene = useScene(), words = useSceneCopy();
   const [tab, setTab] = useState<"metrics" | "ping">("metrics"),
     [hours, setHours] = useState(6),
     [width, setWidth] = useState(360),
@@ -99,14 +102,14 @@ export default function Detail({
   return (
     <div className="detail-content" ref={container}>
       <div className="detail-title">
-        <div className="ledger-overline" data-pond-avoid><span>池畔观测手札</span><span>NO. {String(n.id).padStart(2, "0")}</span></div>
+        <div className="ledger-overline" data-pond-avoid><span>{words.journal}</span><span>NO. {String(n.id).padStart(2, "0")}</span></div>
         <div className="ledger-identity">
           <div data-pond-avoid>
             <h2 data-pond-ink>{n.name}</h2>
             <p>{[n.country, n.group, n.virt].filter(Boolean).join(" / ") || "未设置分组"}</p>
             <span className={"node-status " + state}><i />{statusLabels[state]}</span>
           </div>
-          <div className="ledger-imprint"><Watermark id={n.id} values={vitals} /><small>此刻 · 水纹</small></div>
+          {scene === "forest" ? <div className="ledger-imprint ledger-flag"><Flag country={n.country} className="flag-large" /><small>{words.imprint}{n.country || "—"}</small></div> : <div className="ledger-imprint"><Watermark id={n.id} values={vitals} /><small>{words.imprint}</small></div>}
         </div>
         <div className="detail-vitals" data-pond-avoid>
           {["CPU", "MEM", "DSK"].map((label, i) => <Meter key={label} label={label} value={vitals[i]} />)}
@@ -156,19 +159,27 @@ export default function Detail({
       </section>
       <section className="detail-section usage-record">
         <h3 data-pond-avoid>
-          <span className="chapter-mark" aria-hidden="true">弐</span>用量与账期 <span>WATERLINE</span>
+          <span className="chapter-mark" aria-hidden="true">弐</span>用量与账期 <span>{words.usage}</span>
         </h3>
         <div className="usage-waterline" data-pond-avoid>
           <div className="usage-amount"><div><span>本期计费用量</span><strong>{bytes(usage)}</strong></div><div><span>占用额度</span><strong>{usagePercent === null ? "—" : usagePercent.toFixed(1) + "%"}</strong></div></div>
           <div className="tide-scale" aria-label={`本期已用 ${bytes(usage)}，额度 ${bytes(n.traffic_limit)}`}>
             <div className="tide-marks" aria-hidden="true">{"┊".repeat(50)}</div>
-            <div className="tide-glyphs" aria-hidden="true">{"∿ · ".repeat(18)}</div>
-            {usagePercent !== null && <div className="tide-fill" style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }} aria-hidden="true">{"∿∿∿".repeat(25)}</div>}
+            {scene === "forest" ? (
+              <div className="pixel-gauge" aria-hidden="true">
+                {Array.from({ length: 40 }, (_, k) => <i key={k} className={usagePercent !== null && k < Math.round(Math.min(100, Math.max(0, usagePercent)) * 0.4) ? "on" : undefined} />)}
+              </div>
+            ) : (
+              <>
+                <div className="tide-glyphs" aria-hidden="true">{"∿ · ".repeat(18)}</div>
+                {usagePercent !== null && <div className="tide-fill" style={{ width: `${Math.min(100, Math.max(0, usagePercent))}%` }} aria-hidden="true">{"∿∿∿".repeat(25)}</div>}
+              </>
+            )}
           </div>
           <div className="tide-labels"><span>0</span><span>额度 {bytes(n.traffic_limit)}</span></div>
           <div className="traffic-ledger">
-            <div><span>↓ 入流 · 本期下载</span><strong>{bytes(n.month_rx)}</strong><small>累计 {bytes(n.total_rx)}</small></div>
-            <div><span>↑ 出流 · 本期上传</span><strong>{bytes(n.month_tx)}</strong><small>累计 {bytes(n.total_tx)}</small></div>
+            <div><span>{words.rx}</span><strong>{bytes(n.month_rx)}</strong><small>累计 {bytes(n.total_rx)}</small></div>
+            <div><span>{words.tx}</span><strong>{bytes(n.month_tx)}</strong><small>累计 {bytes(n.total_tx)}</small></div>
           </div>
           <div className="billing-note"><span>账期</span><strong>{money(n.price, n.currency)}</strong><span>/ {cycle(n.billing_cycle)}</span></div>
         </div>
@@ -237,7 +248,7 @@ export default function Detail({
           {hidden ? (
             <p className="history-message">页面隐藏，历史请求已暂停。</p>
           ) : loading ? (
-            <p className="history-message">正在读取水面的痕迹…</p>
+            <p className="history-message">{words.loading}</p>
           ) : error ? (
             <div className="history-message" role="alert">
               <p>{error}</p>
@@ -328,7 +339,7 @@ export default function Detail({
         </div>
       </section>
       <p className="detail-end" data-pond-avoid>
-        · 观测至此，水面如常 ·
+        {words.end}
       </p>
     </div>
   );

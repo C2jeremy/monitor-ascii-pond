@@ -1,8 +1,9 @@
 import { memo, type MouseEvent } from "react";
+import { Flag } from "./Flag";
+import { useScene } from "../scene/context";
 import type { NodeData } from "../domain/nodes";
 import { expiryDays, monthUsage, seenAgo } from "../domain/nodes";
 import { bytes, duration, expiry, pct, rate } from "../domain/format";
-import { Watermark } from "./Watermark";
 import { nodeHref } from "../route";
 export function nodeState(n: NodeData) {
   return !n.online
@@ -23,6 +24,7 @@ export const statusLabels = {
 const level = (v: number | null) =>
   v === null ? " is-empty" : v >= 90 ? " is-crit" : v >= 75 ? " is-warn" : "";
 export function Meter({ label, value }: { label: string; value: number | null }) {
+  const scene = useScene();
   const filled =
     value === null
       ? 0
@@ -30,10 +32,18 @@ export function Meter({ label, value }: { label: string; value: number | null })
   return (
     <span className={"meter" + level(value)}>
       <span className="meter-label">{label}</span>
-      <span className="meter-track" aria-hidden="true">
-        <span className="meter-fill">{"∿".repeat(filled)}</span>
-        {"·".repeat(8 - filled)}
-      </span>
+      {scene === "forest" ? (
+        <span className="meter-track pixel-track" aria-hidden="true">
+          {Array.from({ length: 8 }, (_, k) => (
+            <i key={k} className={k < filled ? "on" : undefined} />
+          ))}
+        </span>
+      ) : (
+        <span className="meter-track" aria-hidden="true">
+          <span className="meter-fill">{"∿".repeat(filled)}</span>
+          {"·".repeat(8 - filled)}
+        </span>
+      )}
       <span className="meter-value">
         {value === null ? "—" : value.toFixed(1) + "%"}
       </span>
@@ -71,14 +81,7 @@ export const NodeRow = memo(function NodeRow({
         <span className="node-sign-number">
           {String(index + 1).padStart(2, "0")}
         </span>
-        <Watermark
-          id={n.id}
-          values={[
-            m?.cpu ?? null,
-            m ? pct(m.mem_used, m.mem_total) : null,
-            m ? pct(m.disk_used, m.disk_total) : null,
-          ]}
-        />
+        <Flag country={n.country} />
         <span className="node-sign-country">{n.country || "NODE"}</span>
       </div>
       <div className="node-letter">
@@ -128,9 +131,6 @@ export const NodeRow = memo(function NodeRow({
           </span>
         </div>
       </div>
-      <span className="node-ripple-edge" aria-hidden="true">
-        ﹏ ﹏ ﹏ ﹏ ﹏
-      </span>
     </a>
   );
 });

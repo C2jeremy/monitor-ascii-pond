@@ -21,6 +21,7 @@ import { PondLayer } from "./pond/PondLayer";
 import { NodeRow } from "./components/NodeRow";
 import { PondStage } from "./components/PondStage";
 import { sceneCopy } from "./scene/copy";
+import { SceneContext } from "./scene/context";
 import { PaperSelect } from "./components/PaperSelect";
 import Detail from "./components/Detail";
 import { routeId, nodeHref, homeHref, hashRouting } from "./route";
@@ -218,7 +219,7 @@ export default function App() {
   const hasTitle = Boolean(settings.hero_title.trim());
   const hasIntro = hasTitle || Boolean(settings.hero_eyebrow.trim() || settings.hero_subtitle.trim());
   return (
-    <>
+    <SceneContext.Provider value={settings.scene}>
       <PondLayer
         enabled={settingsReady && pondEnabled}
         scene={settings.scene}
@@ -532,6 +533,6 @@ export default function App() {
           </span>
         </footer>
       </div>
-    </>
+    </SceneContext.Provider>
   );
 }

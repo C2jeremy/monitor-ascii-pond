@@ -9,7 +9,12 @@ export default defineConfig({
         (process.env.MOCK ? "/src/data/mock-source.ts" : "/src/data/source.ts"),
     },
   },
-  build: { outDir: "dist", chunkSizeWarningLimit: 650 },
+  build: {
+    outDir: "dist",
+    chunkSizeWarningLimit: 650,
+    // Flags stay separate files; inlining all of them would bloat the main bundle.
+    assetsInlineLimit: (file) => (file.includes("country-flag-icons") ? false : undefined),
+  },
   server: {
     proxy: {
       "/api": {
