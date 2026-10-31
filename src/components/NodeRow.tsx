@@ -18,13 +18,16 @@ export const statusLabels = {
   waiting: "等待上报",
   invalid: "指标异常",
 };
+// 负载分级：≥90 危险，≥75 警告，用于给读数着色。
+const level = (v: number | null) =>
+  v === null ? " is-empty" : v >= 90 ? " is-crit" : v >= 75 ? " is-warn" : "";
 export function Meter({ label, value }: { label: string; value: number | null }) {
   const filled =
     value === null
       ? 0
       : Math.round((Math.max(0, Math.min(100, value)) / 100) * 8);
   return (
-    <span className="meter">
+    <span className={"meter" + level(value)}>
       <span className="meter-label">{label}</span>
       <span className="meter-track" aria-hidden="true">
         <span className="meter-fill">{"∿".repeat(filled)}</span>
